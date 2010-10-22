@@ -190,14 +190,14 @@ StreamAudioVorbis::VorbisFrame::VorbisFrame(
     st = pSample->GetStartTime();
     assert(st >= 0);
 
-    const long long ns = st * 100;  //nanoseconds
+    //const long long ns = st * 100;  //nanoseconds
 
     const Context& ctx = pStream->m_context;
     const unsigned long scale = ctx.GetTimecodeScale();
     assert(scale >= 1);
 
     //TODO: verify this when scale equals audio sampling rate
-    const long long tc = ns / scale;
+    const long long tc = st / scale;
     assert(tc <= ULONG_MAX);
 
     m_timecode = static_cast<unsigned long>(tc);

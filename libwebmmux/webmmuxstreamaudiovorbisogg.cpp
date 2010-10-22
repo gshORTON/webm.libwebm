@@ -179,13 +179,13 @@ StreamAudioVorbisOgg::VorbisFrame::VorbisFrame(
     //secs [=] samples / samples/sec
     const double secs = samples / double(samplesPerSec);
 
-    const double ns = secs * 1000000000.0;
+    //const double ns = secs * 1000000000.0;
 
     const Context& ctx = pStream->m_context;
     const unsigned long scale = ctx.GetTimecodeScale();
     assert(scale >= 1);
 
-    const double tc = ns / scale;
+    const double tc = secs / scale;
     assert(tc <= ULONG_MAX);
 
     m_timecode = static_cast<unsigned long>(tc);
