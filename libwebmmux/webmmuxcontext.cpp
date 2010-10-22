@@ -46,6 +46,13 @@ Context::~Context()
    assert(m_file.GetStream() == 0);
 }
 
+void Context::GetVersion(int& major, int& minor, int& build, int& revision)
+{
+    major = 1;
+    minor = 0;
+    build = 0;
+    revision = 3;
+}
 
 void Context::SetVideoStream(StreamVideo* pVideo)
 {
@@ -172,7 +179,7 @@ void Context::WriteEbmlHeader()
     m_file.WriteID4(0x1A45DFA3);
 
     //Allocate 1 byte of storage for Ebml header size.
-	const long long start_pos = m_file.SetPosition(1, std::ios_base::cur);
+    const long long start_pos = m_file.SetPosition(1, std::ios_base::cur);
 
     //EBML Version
 
@@ -210,7 +217,7 @@ void Context::WriteEbmlHeader()
 
     m_file.WriteID1(0xEC);  //Void element
     m_file.Write1UInt(9);
-	m_file.SetPosition(9, std::ios_base::cur);
+    m_file.SetPosition(9, std::ios_base::cur);
 
     //Doc Type Version
 
@@ -444,8 +451,9 @@ void Context::InitInfo()
 
     wostringstream os;
     os << L"libwebmmux-";
-    //TODO: DW App/Version? VersionHandling::GetVersion(fname.c_str(), os);
-	os << L"0.0.0.0";
+    int major, minor, build, revision;
+    Context::GetVersion(major, minor, build, revision);
+    os << major << L"." << minor << L"." << build << L"." << revision;
 
     m_file.Write1UTF8(os.str().c_str());  //writes both EBML size and payload
 

@@ -31,6 +31,8 @@ public:
    Context();
    ~Context();
 
+   void GetVersion(int& major, int& minor, int& build, int& revision);
+
    void SetVideoStream(StreamVideo*);
 
    //TODO: this needs to liberalized to handle multiple audio streams.
