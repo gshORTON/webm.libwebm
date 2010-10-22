@@ -11,12 +11,12 @@
 namespace webmmux
 {
 
-typedef struct {
+struct MediaSample {
    long long startTime;
    long long stopTime;
    unsigned int extraData;
    long bufLength;
    unsigned char* pData;
-} MediaSample;
+};
 
 }  //end namespace webmmux
