@@ -168,7 +168,7 @@ StreamAudioVorbisOgg::VorbisFrame::VorbisFrame(
     StreamAudioVorbisOgg* pStream)
 {
 
-    long long st = pSample->GetStartTime();
+    long long st = pSample->startTime;
     assert(st >= 0);
 
     const double samples = double(st);
@@ -190,15 +190,12 @@ StreamAudioVorbisOgg::VorbisFrame::VorbisFrame(
 
     m_timecode = static_cast<unsigned long>(tc);
 
-    const long size = pSample->GetBufLength();
+    const long size = pSample->bufLength;
     assert(size > 0);
 
     m_size = size;
 
-    unsigned char* ptr;
-
-    int res = pSample->GetDataBuf(&ptr);
-    assert(res == 0);
+    unsigned char* ptr = pSample->pData;
     assert(ptr);
 
     m_data = new (std::nothrow) unsigned char[m_size];
@@ -440,13 +437,10 @@ int StreamAudioVorbisOgg::Receive(MediaSample* pSample)
     if (pSample == 0)
         return -1;
 
-    unsigned char* buf;
-
-    int res = pSample->GetDataBuf(&buf);
-    assert(res == 0);
+    unsigned char* buf = pSample->pData;
     assert(buf);
 
-	const long len = pSample->GetBufLength();
+    const long len = pSample->bufLength;
 
     if (len < 0)
         return -1;
@@ -497,21 +491,14 @@ int StreamAudioVorbisOgg::Receive(MediaSample* pSample)
 
     long long st, sp;
 
-    st = pSample->GetStartTime();
-	sp = pSample->GetStopTime();
-
-	//TODO: DW add error checking here?
-    //if (FAILED(hr))
-    //    return VFW_E_SAMPLE_TIME_NOT_SET;
-
-    //if (hr != S_OK)  //do not have stop time
-    //    return E_INVALIDARG;
+    st = pSample->startTime;
+    sp = pSample->stopTime;
 
     if (st >= sp)
         return 0;  //throw away this sample
 
     VorbisFrame* const pFrame = new (std::nothrow) VorbisFrame(pSample, this);
-    //assert(SUCCEEDED(hr));  //TODO
+    assert(pFrame);
 
     m_context.NotifyAudioFrame(this, pFrame);
 

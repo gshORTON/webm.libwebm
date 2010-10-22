@@ -174,10 +174,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\webmmuxmediasample.cpp"
-				>
-			</File>
-			<File
 				RelativePath=".\webmmuxmediasample.hpp"
 				>
 			</File>

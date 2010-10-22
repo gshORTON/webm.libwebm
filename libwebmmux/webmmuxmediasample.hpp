@@ -10,41 +10,13 @@
 
 namespace webmmux
 {
-	
-class MediaSample
-{
 
-public:
-	//TODO: DW Should this class control the data or just hold a pointer to the data?
-	MediaSample();
-	~MediaSample();
-
-	long GetBufLength();
-	long long GetStartTime();
-	long long GetStopTime();
-	int GetDataBuf(unsigned char** ppBuf);
-	//int GetWidth();
-	//int GetHeight();
-	unsigned int GetFlags();
-
-	//SetBufLength(long);
-	int FillDataBuf(unsigned char* pBuf, long numChars);
-	int SetStartTime(long long startTime_nanoseconds); // in absolute nanoseconds
-	int SetStopTime(long long stopTime_nanoseconds); // in absolute nanoseconds
-	//int SetWidth(int width);
-	//int SetHeight(int height);
-	int SetFlags(unsigned int);
-
-private:
-   unsigned char* m_pData;
-   long m_bufLength;
-   long long m_startTime;
-   long long m_stopTime;
-   //int m_width;
-   //int m_height;
-   //TODO: DW samplespersecond for audio?
-   int m_samplesPerSecond;
-   unsigned int m_flags;
-};
+typedef struct {
+   long long startTime;
+   long long stopTime;
+   unsigned int extraData;
+   long bufLength;
+   unsigned char* pData;
+} MediaSample;
 
 }  //end namespace webmmux

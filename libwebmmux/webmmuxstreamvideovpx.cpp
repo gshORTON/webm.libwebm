@@ -24,14 +24,20 @@ namespace webmmux
 StreamVideoVPx::VPxFrame::VPxFrame(
     MediaSample* pSample,
     StreamVideoVPx* pStream) :
-    m_pSample(pSample)
+    m_pSample(new MediaSample(*pSample))
 {
+
     assert(m_pSample);
-    //m_pSample->AddRef();
+    m_pSample->pData = 0;
+    assert(pSample->pData);
+
+    //create a separate copy of the data for the frame
+    m_pSample->pData = new unsigned char[pSample->bufLength];
+    memcpy(m_pSample->pData, pSample->pData, pSample->bufLength);
 
     long long st, sp;  //reftime units
 
-    st = m_pSample->GetStartTime();
+    st = m_pSample->startTime;
     assert(st >= 0);
 
     //const long long ns = st * 100;  //nanoseconds
@@ -49,11 +55,8 @@ StreamVideoVPx::VPxFrame::VPxFrame(
 
 StreamVideoVPx::VPxFrame::~VPxFrame()
 {
-	//TODO: DW add a reference to the MediaSample for locking?
-	if (m_pSample)
-		delete m_pSample;
-//    const ULONG n = m_pSample->Release();
-//    n;
+    if (m_pSample->pData)
+       delete[] m_pSample->pData;
 }
 
 
@@ -65,13 +68,13 @@ unsigned long StreamVideoVPx::VPxFrame::GetTimecode() const
 
 bool StreamVideoVPx::VPxFrame::IsKey() const
 {
-	return(m_pSample->GetFlags() & VPX_FRAME_IS_KEY);
+    return(m_pSample->extraData & VPX_FRAME_IS_KEY);
 }
 
 
 unsigned long StreamVideoVPx::VPxFrame::GetSize() const
 {
-    const long result = m_pSample->GetBufLength();
+    const long result = m_pSample->bufLength;
     assert(result >= 0);
 
     return result;
@@ -80,13 +83,8 @@ unsigned long StreamVideoVPx::VPxFrame::GetSize() const
 
 const unsigned char* StreamVideoVPx::VPxFrame::GetData() const
 {
-    unsigned char* ptr;
-
-    const int res = m_pSample->GetDataBuf(&ptr);
-    assert(res == 0);
-    assert(ptr);
-
-    return ptr;
+    assert(m_pSample->pData);
+    return m_pSample->pData;
 }
 
 
@@ -146,8 +144,8 @@ void StreamVideoVPx::WriteTrackSettings()
     const USHORT width = static_cast<USHORT>(bmih.biWidth);
     const USHORT height = static_cast<USHORT>(bmih.biHeight);*/
 
-	const unsigned short width = static_cast<unsigned short>(m_Info.GetWidth());
-	const unsigned short height = static_cast<unsigned short>(m_Info.GetHeight());
+    const unsigned short width = static_cast<unsigned short>(m_Info.GetWidth());
+    const unsigned short height = static_cast<unsigned short>(m_Info.GetHeight());
 
     f.WriteID1(0xB0);  //width
     f.Write1UInt(2);

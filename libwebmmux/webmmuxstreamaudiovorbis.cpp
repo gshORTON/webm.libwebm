@@ -187,7 +187,7 @@ StreamAudioVorbis::VorbisFrame::VorbisFrame(
 {
     long long st, sp;  //reftime units
 
-    st = pSample->GetStartTime();
+    st = pSample->startTime;
     assert(st >= 0);
 
     //const long long ns = st * 100;  //nanoseconds
@@ -202,15 +202,12 @@ StreamAudioVorbis::VorbisFrame::VorbisFrame(
 
     m_timecode = static_cast<unsigned long>(tc);
 
-    const long size = pSample->GetBufLength();
+    const long size = pSample->bufLength;
     assert(size > 0);
 
     m_size = size;
 
-    unsigned char* ptr;
-
-    int res = pSample->GetDataBuf(&ptr);
-    assert(res == 0);
+    unsigned char* ptr = pSample->pData;
     assert(ptr);
 
     m_data = new (std::nothrow) unsigned char[m_size];
