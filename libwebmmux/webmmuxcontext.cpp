@@ -23,7 +23,6 @@ using std::wostringstream;
 namespace webmmux
 {
 
-//HMODULE s_hModule = 0;
 
 Context::Context() :
    m_pVideo(0),

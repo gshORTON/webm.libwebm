@@ -31,66 +31,14 @@ namespace webmmux
 // track's codec private data block.
 enum { kPRIVATE_DATA_BYTES_RESERVED = 8000 };
 
-#if 0
-//TODO: DW is GetMediaTypes needed for generic lib?
-void StreamAudioVorbisOgg::GetMediaTypes(CMediaTypes& mtv)
-{
-    AM_MEDIA_TYPE mt;
-
-    mt.majortype = MEDIATYPE_Audio;
-    mt.subtype = VorbisTypes::MEDIASUBTYPE_Vorbis;
-    mt.bFixedSizeSamples = FALSE;
-    mt.bTemporalCompression = FALSE;
-    mt.lSampleSize = 0;
-    mt.formattype = GUID_NULL;
-    mt.pUnk = 0;
-    mt.cbFormat = 0;
-    mt.pbFormat = 0;
-
-    mtv.Add(mt);
-}
-#endif
-
-
-#if 0
-//TODO: DW is QueryAccept necessary for generic lib?
-bool StreamAudioVorbisOgg::QueryAccept(const AM_MEDIA_TYPE& mt)
-{
-    if (mt.majortype != MEDIATYPE_Audio)
-        return false;
-
-    if (mt.formattype != VorbisTypes::FORMAT_Vorbis)
-        return false;
-
-    if (mt.pbFormat == 0)
-        return false;
-
-    using VorbisTypes::VORBISFORMAT;
-
-    if (mt.cbFormat < sizeof(VORBISFORMAT))
-        return false;
-
-    const VORBISFORMAT& fmt = (VORBISFORMAT&)(*mt.pbFormat);
-
-    if (fmt.numChannels == 0)
-        return false;
-
-    if (fmt.samplesPerSec == 0)
-        return false;
-
-    return true;
-}
-#endif
-
-
 StreamAudio* StreamAudioVorbisOgg::CreateStream(
     Context& ctx,
-	const VorbisTypes::VORBISFORMAT& mt)
+    const VorbisTypes::VORBISFORMAT& mt)
 {
     //assert(QueryAccept(mt));
 
-	const unsigned char* const pb = static_cast<const unsigned char*>(static_cast<const void*>(&mt));
-	const unsigned long cb = sizeof(VorbisTypes::VORBISFORMAT);
+    const unsigned char* const pb = static_cast<const unsigned char*>(static_cast<const void*>(&mt));
+    const unsigned long cb = sizeof(VorbisTypes::VORBISFORMAT);
 
     return new (std::nothrow) StreamAudioVorbisOgg(ctx, pb, cb);
 }

@@ -47,7 +47,7 @@ int EbmlIO::File::SetSize(long long size)
 
 long long EbmlIO::File::SetPosition(
     long long pos,
-	std::ios_base::seekdir origin)
+    std::ios_base::seekdir origin)
 {
     return EbmlIO::SetPosition(m_pStream, pos, origin);
 }
@@ -189,21 +189,21 @@ int EbmlIO::SetSize(EbmlIO::EbmlStream* pStream, long long size_)
     assert(pStream);
     assert(size_ >= 0);
 
-	std::streampos currentPos = pStream->tellp();
-	pStream->seekp(0, std::ios_base::end);
+    std::streampos currentPos = pStream->tellp();
+    pStream->seekp(0, std::ios_base::end);
 
-	if (size_ > pStream->tellp())
-	{
+    if (size_ > pStream->tellp())
+    {
     unsigned long long size;
     size = size_ - pStream->tellp();
-	long currentWidth = pStream->width();
-	pStream->width(size);
-	*pStream << ' ';
-	pStream->width(currentWidth);
-	}
+    long currentWidth = pStream->width();
+    pStream->width(size);
+    *pStream << ' ';
+    pStream->width(currentWidth);
+    }
 
-	pStream->seekp(currentPos);
-	return 0; //TODO: DW check for failure
+    pStream->seekp(currentPos);
+    return 0; //TODO: DW check for failure
 
 //    return pStream->SetSize(size);
 
@@ -213,7 +213,7 @@ int EbmlIO::SetSize(EbmlIO::EbmlStream* pStream, long long size_)
 long long EbmlIO::SetPosition(
     EbmlIO::EbmlStream* pStream,
     long long move_,
-	std::ios_base::seekdir origin)
+    std::ios_base::seekdir origin)
 {
     assert(pStream);
 
@@ -223,19 +223,19 @@ long long EbmlIO::SetPosition(
 
     unsigned long long newpos;
 
-	//pStream->seekg(static_cast<std::streamoff>(move.QuadPart), origin);
-	pStream->seekp(static_cast<std::streamoff>(move), origin);
+    //pStream->seekg(static_cast<std::streamoff>(move.QuadPart), origin);
+    pStream->seekp(static_cast<std::streamoff>(move), origin);
 
-	if (pStream->fail())
-	{
-		pStream->clear();
-		SetSize(pStream, move);
-		pStream->seekp(std::ios_base::end);
-	}
+    if (pStream->fail())
+    {
+       pStream->clear();
+       SetSize(pStream, move);
+       pStream->seekp(std::ios_base::end);
+    }
 
     //TODO: DW add error checking
 
-	newpos = pStream->tellp();
+    newpos = pStream->tellp();
 
     return newpos;
 }
@@ -248,16 +248,10 @@ void EbmlIO::Write(
 {
     assert(pStream);
 
-    unsigned long cbWritten;
-
-	//TODO: DW  see if const cast can be avoided
-	unsigned char *charbuf = static_cast<unsigned char*>(const_cast<void*>(buf));
+    //TODO: DW  see if const cast can be avoided
+    unsigned char *charbuf = static_cast<unsigned char*>(const_cast<void*>(buf));
     pStream->write(charbuf, cb);
-	assert(pStream->fail() == false);
-	//todo: DW flush for degugging purposes
-	pStream->flush();
-
-
+    assert(pStream->fail() == false);
 }
 
 
@@ -317,19 +311,13 @@ unsigned long EbmlIO::ReadID4(EbmlIO::EbmlStream* pStream)
     unsigned char* const p = reinterpret_cast<unsigned char*>(&id);
     unsigned char* q = p + 4;
 
-	pStream->seekg(pStream->tellp());  // use current put pointer for reads
+    pStream->seekg(pStream->tellp());  // use current put pointer for reads
 
     for (;;)
     {
-        unsigned long cb;
 
-		//TODO: DW clean up
-		pStream->read(--q, 1);
-		assert(pStream->good());
-//        const HRESULT hr = pStream->Read(--q, 1, &cb);
-//        assert(hr == S_OK);
-//        assert(cb == 1);
-//        hr;
+       pStream->read(--q, 1);
+       assert(pStream->good());
 
         if (q == p)
             break;
@@ -338,7 +326,7 @@ unsigned long EbmlIO::ReadID4(EbmlIO::EbmlStream* pStream)
     assert(id & 0x10000000);
     assert(id <= 0x1FFFFFFE);
 
-	pStream->seekp(pStream->tellg()); // after read, set put pointer to last read position
+    pStream->seekp(pStream->tellg()); // after read, set put pointer to last read position
 
     return id;
 }
@@ -428,13 +416,13 @@ void EbmlIO::Write1UTF8(
     assert(pStream);
     assert(str);
 
-	const int cb = wcstombs(0, str, 0);
+    const int cb = wcstombs(0, str, 0);
     assert(cb > 0);
 
     char* const buf = (char*)malloc(cb + 1);
 
     const int n = wcstombs(buf, str, cb + 1);
-		
+
     assert(n == cb);
     assert(n > 0);
     assert(n <= 255);
@@ -466,15 +454,8 @@ void EbmlIO::Serialize(
     {
         --q;
 
-        unsigned long cbWritten;
-
-		//TODO: DW clean up
-        pStream->write(q, 1);
-		//pStream->put(*q);
-		assert(pStream->fail() == false);
-        //assert(SUCCEEDED(hr));
-        //assert(cbWritten == 1);
-        //hr;
+       pStream->write(q, 1);
+       assert(pStream->fail() == false);
     }
 }
 

@@ -26,88 +26,6 @@ using std::setw;
 namespace webmmux
 {
 
-
-#if 0
-	//TODO: DW GetMediaTypes needed for generic lib?
-void StreamAudioVorbis::GetMediaTypes(CMediaTypes& mtv)
-{
-    AM_MEDIA_TYPE mt;
-
-    mt.majortype = MEDIATYPE_Audio;
-    mt.subtype = VorbisTypes::MEDIASUBTYPE_Vorbis2;
-    mt.bFixedSizeSamples = FALSE;
-    mt.bTemporalCompression = FALSE;
-    mt.lSampleSize = 0;
-    mt.formattype = GUID_NULL;
-    mt.pUnk = 0;
-    mt.cbFormat = 0;
-    mt.pbFormat = 0;
-
-    mtv.Add(mt);
-}
-#endif
-
-#if 0
-//TODO: DW QueryAccept needed for generic lib?
-bool StreamAudioVorbis::QueryAccept(const AM_MEDIA_TYPE& mt)
-{
-    if (mt.majortype != MEDIATYPE_Audio)
-        return false;
-
-    if (mt.subtype != VorbisTypes::MEDIASUBTYPE_Vorbis2)
-        return false;
-
-    if (mt.formattype != VorbisTypes::FORMAT_Vorbis2)
-        return false;
-
-    using VorbisTypes::VORBISFORMAT2;
-
-    if (mt.cbFormat < sizeof(VORBISFORMAT2))
-        return false;
-
-    if (mt.pbFormat == 0)
-        return false;
-
-    const VORBISFORMAT2& fmt = (VORBISFORMAT2&)(*mt.pbFormat);
-
-    if (fmt.channels == 0)
-        return false;
-
-    if (fmt.channels > 255)
-        return false;
-
-    if (fmt.samplesPerSec == 0)
-        return false;
-
-    //TODO: fmt.dwBitsPerSample
-
-    const unsigned long ident_len = fmt.headerSize[0];
-
-    if (ident_len == 0)  //TODO: should be 30?
-        return false;
-
-    const unsigned long comments_len = fmt.headerSize[1];
-
-    //TODO: I think the comments header is optional
-    if (comments_len == 0)
-        return false;
-
-    const unsigned long setup_len = fmt.headerSize[2];
-
-    if (setup_len == 0)
-        return false;
-
-    const unsigned long hdr_len = ident_len + comments_len + setup_len;
-    const unsigned long cbFormat = sizeof(VORBISFORMAT2) + hdr_len;
-
-    if (mt.cbFormat < cbFormat)
-        return false;
-
-    return true;
-}
-#endif
-
-
 #if 0
 HRESULT StreamAudioVorbis::GetAllocatorRequirements(
     const AM_MEDIA_TYPE&,
@@ -140,14 +58,12 @@ HRESULT StreamAudioVorbis::GetAllocatorRequirements(
 
 StreamAudio* StreamAudioVorbis::CreateStream(
     Context& ctx,
-	const VorbisTypes::VORBISFORMAT2& mt)
+    const VorbisTypes::VORBISFORMAT2& mt)
 {
-	//TODO: DW Re-enable if QueryAccept is needed for generic lib
-    //assert(QueryAccept(mt));
 
-	//TODO: DW casting to void to unsigned char* seems suspect, but it works...
+    //TODO: DW casting to void to unsigned char* seems suspect, but it works...
     const unsigned char* const pb = static_cast<const unsigned char*>(static_cast<const void*>(&mt));
-	const unsigned long cb = sizeof(VorbisTypes::VORBISFORMAT2);
+    const unsigned long cb = sizeof(VorbisTypes::VORBISFORMAT2);
 
     return new (std::nothrow) StreamAudioVorbis(ctx, pb, cb);
 }
@@ -185,7 +101,7 @@ StreamAudioVorbis::VorbisFrame::VorbisFrame(
     MediaSample* pSample,
     StreamAudioVorbis* pStream)
 {
-    long long st, sp;  //reftime units
+    long long st;  //reftime units
 
     st = pSample->startTime;
     assert(st >= 0);
