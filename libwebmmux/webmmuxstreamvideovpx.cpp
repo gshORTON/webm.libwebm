@@ -8,6 +8,7 @@
 
 #include <climits>
 #include <cassert>
+#include <cstring>
 #include "webmmuxcontext.hpp"
 #include "webmmuxstreamvideovpx.hpp"
 #ifdef _DEBUG
