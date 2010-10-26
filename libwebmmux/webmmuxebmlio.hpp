@@ -22,6 +22,7 @@ namespace webmmux
     class EbmlStream
     {
     public:
+        virtual ~EbmlStream() {};
 
         // Expands the size of the stream, padding junk bytes if the SetSize is longer than the current stream. Seek pointer must be unaffected. Return nonzero success.
         virtual int SetSize(uint64_t size) = 0;
