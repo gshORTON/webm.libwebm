@@ -12,36 +12,37 @@ namespace webmmux
 {
 int StreamInfo::SetTimebase(int rate, int scale)
 {
-	m_timebase_rate = rate;
-	m_timebase_scale = scale;
-	return(0);
+    m_timebase_rate = rate;
+    m_timebase_scale = scale;
+    return(0);
 }
 
 int StreamInfo::SetWidth(int width)
 {
-	m_width = width;
-	return(0);
+    m_width = width;
+    return(0);
 }
 
 int StreamInfo::SetHeight(int height)
 {
-	m_height = height;
-	return(0);
+    m_height = height;
+    return(0);
 }
 
 int StreamInfo::GetWidth()
 {
-	return(m_width);
+    return(m_width);
 }
 
 int StreamInfo::GetHeight()
 {
-	return(m_height);
+    return(m_height);
 }
 
 float StreamInfo::GetFrameRate()
 {
-	return((float)m_timebase_scale/(float)m_timebase_rate);
+    return((float)m_timebase_scale/(float)m_timebase_rate);
 }
 
 } // WebmuxLib namespace
+

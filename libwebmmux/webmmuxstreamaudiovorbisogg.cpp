@@ -6,13 +6,13 @@
 // in the file PATENTS.  All contributing project authors may
 // be found in the AUTHORS file in the root of the source tree.
 
+#include <cstring>
 #include <cassert>
 #include <climits>
-#include <cstring>
 #include "webmmuxcontext.hpp"
 #include "webmmuxstreamaudiovorbisogg.hpp"
 #include "vorbistypes.hpp"
-#ifdef _DEBUG
+#if 0 //def _DEBUG
 //#include <odbgstream.hpp>
 #include <iomanip>
 using std::endl;
@@ -243,17 +243,14 @@ StreamAudioVorbisOgg::StreamAudioVorbisOgg(
 
 void StreamAudioVorbisOgg::Final()
 {
-    const int hr = FinalizeTrackCodecPrivate();
-    hr;
-    //TODO: DW add error check
-    //SUCCEEDED(hr);
+    FinalizeTrackCodecPrivate();
 }
 
 
 
 void StreamAudioVorbisOgg::WriteTrackCodecID()
 {
-    EbmlIO::File& f = m_context.m_file;
+    webmmux::File& f = m_context.m_file;
 
     f.WriteID1(0x86);  //Codec ID
     f.Write1String("A_VORBIS");
@@ -262,7 +259,7 @@ void StreamAudioVorbisOgg::WriteTrackCodecID()
 
 void StreamAudioVorbisOgg::WriteTrackCodecName()
 {
-    EbmlIO::File& f = m_context.m_file;
+    webmmux::File& f = m_context.m_file;
 
     f.WriteID3(0x258688);  //Codec Name
     f.Write1UTF8(L"VORBIS");
@@ -271,11 +268,11 @@ void StreamAudioVorbisOgg::WriteTrackCodecName()
 
 void StreamAudioVorbisOgg::WriteTrackCodecPrivate()
 {
-    EbmlIO::File& file = m_context.m_file;
+    webmmux::File& file = m_context.m_file;
 
     m_codec_private_data_pos = file.GetPosition();
 
-    file.SetPosition(kPRIVATE_DATA_BYTES_RESERVED, std::ios_base::cur);
+    file.SetPosition(kPRIVATE_DATA_BYTES_RESERVED, webmmux::EBMLIO_SEEK_CURRENT);
 
 #if 0 //def _DEBUG
     odbgstream ods;
@@ -288,7 +285,7 @@ void StreamAudioVorbisOgg::WriteTrackCodecPrivate()
 
 int StreamAudioVorbisOgg::FinalizeTrackCodecPrivate()
 {
-    EbmlIO::File& file = m_context.m_file;
+    webmmux::File& file = m_context.m_file;
 
     const long long old_pos = file.GetPosition();
     file.SetPosition(m_codec_private_data_pos);
@@ -371,7 +368,6 @@ int StreamAudioVorbisOgg::FinalizeTrackCodecPrivate()
     const long long actual_bytes_written =
         file.GetPosition() - private_begin_pos;
 
-    actual_bytes_written;
     assert(actual_bytes_written <= kPRIVATE_DATA_BYTES_RESERVED);
 
     file.SetPosition(old_pos);
@@ -428,7 +424,7 @@ int StreamAudioVorbisOgg::Receive(MediaSample* pSample)
         return 0;
     }
 
-    EbmlIO::File& file = m_context.m_file;
+    webmmux::File& file = m_context.m_file;
 
     if (file.GetStream() == 0)
         return 0;

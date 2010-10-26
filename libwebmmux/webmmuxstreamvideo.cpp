@@ -23,7 +23,7 @@ StreamVideo::StreamVideo(
     const StreamInfo& info) :
     Stream(c)
 {
-	m_Info = info;
+    m_Info = info;
 
 }
 
@@ -67,14 +67,14 @@ StreamVideo::~StreamVideo()
 
 float StreamVideo::GetFramerate() const
 {
-	StreamInfo streamInfo = m_Info;
-	return(streamInfo.GetFrameRate());
+    StreamInfo streamInfo = m_Info;
+    return(streamInfo.GetFrameRate());
 }
 
 
 void StreamVideo::WriteTrackType()
 {
-    EbmlIO::File& f = m_context.m_file;
+    webmmux::File& f = m_context.m_file;
 
     f.WriteID1(0x83);     //track type
     f.Write1UInt(1);

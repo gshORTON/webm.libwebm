@@ -7,13 +7,12 @@
 // be found in the AUTHORS file in the root of the source tree.
 
 #pragma once
-//#include <inttypes.h>
+#include <list>
+#include <string>
 #include "webmmuxebmlio.hpp"
 #include "webmmuxstreamvideo.hpp"
 #include "webmmuxstreamaudio.hpp"
-#include <list>
 
-#include <iostream>
 
 namespace webmmux
 {
@@ -25,7 +24,7 @@ class Context
 
 public:
 
-   EbmlIO::File m_file;
+   webmmux::File m_file;
    std::wstring m_writing_app;
 
    Context();
@@ -38,7 +37,7 @@ public:
    //TODO: this needs to liberalized to handle multiple audio streams.
    void SetAudioStream(StreamAudio*);
 
-   void Open(std::basic_iostream<unsigned char>*);
+   void Open(webmmux::EbmlStream*);
    void Close();
 
     void NotifyVideoFrame(StreamVideo*, StreamVideo::VideoFrame*);
@@ -136,3 +135,4 @@ private:
 
 
 }  //end namespace webmmux
+

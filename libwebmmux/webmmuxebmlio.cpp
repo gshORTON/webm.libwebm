@@ -6,266 +6,233 @@
 // in the file PATENTS.  All contributing project authors may
 // be found in the AUTHORS file in the root of the source tree.
 
-//#include <strmif.h>
 #include <cstdlib>
-#include <cstring>
 #include <cassert>
+#include <cstring>
 #include <limits>
 #include <malloc.h>  //_malloca
 #include "webmmuxebmlio.hpp"
-//#include <cstdlib>
 
-EbmlIO::File::File() : m_pStream(0)
+webmmux::File::File() : m_pStream(0)
 {
 }
 
 
-EbmlIO::File::~File()
+webmmux::File::~File()
 {
     assert(m_pStream == 0);
 }
 
 
-void EbmlIO::File::SetStream(EbmlIO::EbmlStream* p)
+void webmmux::File::SetStream(webmmux::EbmlStream* p)
 {
     assert((m_pStream == 0) || (p == 0));
     m_pStream = p;
 }
 
 
-EbmlIO::EbmlStream* EbmlIO::File::GetStream() const
+webmmux::EbmlStream* webmmux::File::GetStream() const
 {
     return m_pStream;
 }
 
 
-int EbmlIO::File::SetSize(long long size)
+int32_t webmmux::File::SetSize(int64_t size)
 {
-    return EbmlIO::SetSize(m_pStream, size);
+    return webmmux::SetSize(m_pStream, size);
 }
 
 
-long long EbmlIO::File::SetPosition(
-    long long pos,
-    std::ios_base::seekdir origin)
+int64_t webmmux::File::SetPosition(
+    int64_t pos,
+    EbmlIOSeekPosition origin)
 {
-    return EbmlIO::SetPosition(m_pStream, pos, origin);
+    return webmmux::SetPosition(m_pStream, pos, origin);
 }
 
 
-long long EbmlIO::File::GetPosition() const
+int64_t webmmux::File::GetPosition() const
 {
     File* const const_file = const_cast<File*>(this);
-    return const_file->SetPosition(0, std::ios_base::cur);
+    return const_file->SetPosition(0, EBMLIO_SEEK_CURRENT);
 }
 
 
 
-//void EbmlIO::File::Serialize(
+//void webmmux::File::Serialize(
 //    const void* buf,
-//    unsigned long len)
+//    uint32_t len)
 //{
-//    EbmlIO::Serialize(m_pStream, buf, len);
+//    webmmux::Serialize(m_pStream, buf, len);
 //}
 
 
-void EbmlIO::File::Write(const void* buf, unsigned long cb)
+void webmmux::File::Write(const void* buf, uint32_t cb)
 {
-    EbmlIO::Write(m_pStream, buf, cb);
+    webmmux::Write(m_pStream, buf, cb);
 }
 
 
-void EbmlIO::File::Serialize8UInt(long long val)
+void webmmux::File::Serialize8UInt(uint64_t val)
 {
-    EbmlIO::Serialize(m_pStream, &val, 8);
+    webmmux::Serialize(m_pStream, &val, 8);
 }
 
 
 
-void EbmlIO::File::Serialize4UInt(unsigned long val)
+void webmmux::File::Serialize4UInt(uint32_t val)
 {
-    EbmlIO::Serialize(m_pStream, &val, 4);
+    webmmux::Serialize(m_pStream, &val, 4);
 }
 
 
-void EbmlIO::File::Serialize2UInt(unsigned short val)
+void webmmux::File::Serialize2UInt(uint16_t val)
 {
-    EbmlIO::Serialize(m_pStream, &val, 2);
+    webmmux::Serialize(m_pStream, &val, 2);
 }
 
 
-void EbmlIO::File::Serialize1UInt(unsigned char val)
+void webmmux::File::Serialize1UInt(uint8_t val)
 {
-    EbmlIO::Serialize(m_pStream, &val, 1);
+    webmmux::Serialize(m_pStream, &val, 1);
 }
 
 
-void EbmlIO::File::Serialize2SInt(short val)
+void webmmux::File::Serialize2SInt(int16_t val)
 {
-    EbmlIO::Serialize(m_pStream, &val, 2);
+    webmmux::Serialize(m_pStream, &val, 2);
 }
 
 
-void EbmlIO::File::Serialize4Float(float val)
+void webmmux::File::Serialize4Float(float val)
 {
-    EbmlIO::Serialize(m_pStream, &val, 4);
+    webmmux::Serialize(m_pStream, &val, 4);
 }
 
 
-void EbmlIO::File::WriteID4(unsigned long id)
+void webmmux::File::WriteID4(uint32_t id)
 {
-    EbmlIO::WriteID4(m_pStream, id);
+    webmmux::WriteID4(m_pStream, id);
 }
 
 
-void EbmlIO::File::WriteID3(unsigned long id)
+void webmmux::File::WriteID3(uint32_t id)
 {
-    EbmlIO::WriteID3(m_pStream, id);
+    webmmux::WriteID3(m_pStream, id);
 }
 
 
-void EbmlIO::File::WriteID2(unsigned short id)
+void webmmux::File::WriteID2(uint16_t id)
 {
-    EbmlIO::WriteID2(m_pStream, id);
+    webmmux::WriteID2(m_pStream, id);
 }
 
 
-void EbmlIO::File::WriteID1(unsigned char id)
+void webmmux::File::WriteID1(uint8_t id)
 {
-    EbmlIO::WriteID1(m_pStream, id);
+    webmmux::WriteID1(m_pStream, id);
 }
 
 
-unsigned long EbmlIO::File::ReadID4()
+uint32_t webmmux::File::ReadID4()
 {
-    return EbmlIO::ReadID4(m_pStream);
+    return webmmux::ReadID4(m_pStream);
 }
 
 
-void EbmlIO::File::Write8UInt(long long val)
+void webmmux::File::Write8UInt(uint64_t val)
 {
-    EbmlIO::Write8UInt(m_pStream, val);
+    webmmux::Write8UInt(m_pStream, val);
 }
 
 
-void EbmlIO::File::Write4UInt(unsigned long val)
+void webmmux::File::Write4UInt(uint32_t val)
 {
-    EbmlIO::Write4UInt(m_pStream, val);
+    webmmux::Write4UInt(m_pStream, val);
 }
 
 
-void EbmlIO::File::Write2UInt(unsigned short val)
+void webmmux::File::Write2UInt(uint16_t val)
 {
-    EbmlIO::Write2UInt(m_pStream, val);
+    webmmux::Write2UInt(m_pStream, val);
 }
 
 
-void EbmlIO::File::Write1UInt(unsigned char val)
+void webmmux::File::Write1UInt(uint8_t val)
 {
-    EbmlIO::Write1UInt(m_pStream, val);
+    webmmux::Write1UInt(m_pStream, val);
 }
 
 
-void EbmlIO::File::Write1String(const char* str)
+void webmmux::File::Write1String(const char* str)
 {
-    EbmlIO::Write1String(m_pStream, str);
+    webmmux::Write1String(m_pStream, str);
 }
 
 
-//void EbmlIO::File::Write1String(const char* str, size_t len)
+//void webmmux::File::Write1String(const char* str, size_t len)
 //{
-//    EbmlIO::Write1String(m_pStream, str, len);
+//    webmmux::Write1String(m_pStream, str, len);
 //}
 
 
-void EbmlIO::File::Write1UTF8(const wchar_t* str)
+void webmmux::File::Write1UTF8(const wchar_t* str)
 {
-    EbmlIO::Write1UTF8(m_pStream, str);
+    webmmux::Write1UTF8(m_pStream, str);
 }
 
 
-int EbmlIO::SetSize(EbmlIO::EbmlStream* pStream, long long size_)
+int32_t webmmux::SetSize(webmmux::EbmlStream* pStream, int64_t size_)
 {
     assert(pStream);
     assert(size_ >= 0);
 
-    std::streampos currentPos = pStream->tellp();
-    pStream->seekp(0, std::ios_base::end);
-
-    if (size_ > pStream->tellp())
-    {
-    unsigned long long size;
-    size = size_ - pStream->tellp();
-    long currentWidth = pStream->width();
-    pStream->width(size);
-    *pStream << ' ';
-    pStream->width(currentWidth);
-    }
-
-    pStream->seekp(currentPos);
-    return 0; //TODO: DW check for failure
-
-//    return pStream->SetSize(size);
-
+    return pStream->SetSize(size_);
 }
 
 
-long long EbmlIO::SetPosition(
-    EbmlIO::EbmlStream* pStream,
-    long long move_,
-    std::ios_base::seekdir origin)
+int64_t webmmux::SetPosition(
+    webmmux::EbmlStream* pStream,
+    int64_t move_,
+    EbmlIOSeekPosition origin)
 {
     assert(pStream);
 
-    long long move;
-    move = move_;
+    uint64_t newpos;
 
-
-    unsigned long long newpos;
-
-    //pStream->seekg(static_cast<std::streamoff>(move.QuadPart), origin);
-    pStream->seekp(static_cast<std::streamoff>(move), origin);
-
-    if (pStream->fail())
-    {
-       pStream->clear();
-       SetSize(pStream, move);
-       pStream->seekp(std::ios_base::end);
-    }
-
-    //TODO: DW add error checking
-
-    newpos = pStream->tellp();
+    const int res = pStream->Seek(move_, origin, &newpos);
+    assert(res);
 
     return newpos;
 }
 
 
-void EbmlIO::Write(
-    EbmlIO::EbmlStream* pStream,
+void webmmux::Write(
+    webmmux::EbmlStream* pStream,
     const void* buf,
-    unsigned long cb)
+    uint32_t cb)
 {
     assert(pStream);
 
-    //TODO: DW  see if const cast can be avoided
-    unsigned char *charbuf = static_cast<unsigned char*>(const_cast<void*>(buf));
-    pStream->write(charbuf, cb);
-    assert(pStream->fail() == false);
+    uint32_t cbWritten;
+
+    const int res = pStream->Write(buf, cb, &cbWritten);
+    assert(res);
+    assert(cbWritten == cb);
 }
 
 
 
-void EbmlIO::Write8UInt(EbmlIO::EbmlStream* pStream, long long val)
+void webmmux::Write8UInt(webmmux::EbmlStream* pStream, uint64_t val)
 {
-    assert(val <= 0x00FFFFFFFFFFFFFE);  //0000 000x 1111 1111 ...
-    val |= 0x0100000000000000;          //always write 8 unsigned chars
+    assert(val <= 0x00FFFFFFFFFFFFFEULL);  //0000 000x 1111 1111 ...
+    val |= 0x0100000000000000ULL;          //always write 8 unsigned chars
 
     Serialize(pStream, &val, 8);
 }
 
 
-void EbmlIO::Write4UInt(EbmlIO::EbmlStream* pStream, unsigned long val)
+void webmmux::Write4UInt(webmmux::EbmlStream* pStream, uint32_t val)
 {
     assert(val <= 0x0FFFFFFE);  //000x 1111 1111 ...
     val |= 0x10000000;  //always write 4 unsigned chars
@@ -274,7 +241,7 @@ void EbmlIO::Write4UInt(EbmlIO::EbmlStream* pStream, unsigned long val)
 }
 
 
-void EbmlIO::Write2UInt(EbmlIO::EbmlStream* pStream, unsigned short val)
+void webmmux::Write2UInt(webmmux::EbmlStream* pStream, uint16_t val)
 {
     assert(val <= 0x3FFE);  //0x11 1111 1111 1110
     val |= 0x4000;          //always write 2 unsigned chars
@@ -283,7 +250,7 @@ void EbmlIO::Write2UInt(EbmlIO::EbmlStream* pStream, unsigned short val)
 }
 
 
-void EbmlIO::Write1UInt(EbmlIO::EbmlStream* pStream, unsigned char val)
+void webmmux::Write1UInt(webmmux::EbmlStream* pStream, uint8_t val)
 {
     assert(val <= 0x7E);  //x111 1110
     val |= 0x80;          //always write 1 unsigned char
@@ -292,7 +259,7 @@ void EbmlIO::Write1UInt(EbmlIO::EbmlStream* pStream, unsigned char val)
 }
 
 
-void EbmlIO::WriteID4(EbmlIO::EbmlStream* pStream, unsigned long id)
+void webmmux::WriteID4(webmmux::EbmlStream* pStream, uint32_t id)
 {
     assert(pStream);
     assert(id & 0x10000000);  //always write 4 unsigned chars
@@ -302,22 +269,22 @@ void EbmlIO::WriteID4(EbmlIO::EbmlStream* pStream, unsigned long id)
 }
 
 
-unsigned long EbmlIO::ReadID4(EbmlIO::EbmlStream* pStream)
+uint32_t webmmux::ReadID4(webmmux::EbmlStream* pStream)
 {
     assert(pStream);
 
-    unsigned long id;
+    uint32_t id;
 
-    unsigned char* const p = reinterpret_cast<unsigned char*>(&id);
-    unsigned char* q = p + 4;
-
-    pStream->seekg(pStream->tellp());  // use current put pointer for reads
+    uint8_t* const p = reinterpret_cast<uint8_t*>(&id);
+    uint8_t* q = p + 4;
 
     for (;;)
     {
+        uint32_t cb;
 
-       pStream->read(--q, 1);
-       assert(pStream->good());
+        const int res = pStream->Read(--q, 1, &cb);
+        assert(res);
+        assert(cb == 1);
 
         if (q == p)
             break;
@@ -326,13 +293,11 @@ unsigned long EbmlIO::ReadID4(EbmlIO::EbmlStream* pStream)
     assert(id & 0x10000000);
     assert(id <= 0x1FFFFFFE);
 
-    pStream->seekp(pStream->tellg()); // after read, set put pointer to last read position
-
     return id;
 }
 
 
-void EbmlIO::WriteID3(EbmlIO::EbmlStream* pStream, unsigned long id)
+void webmmux::WriteID3(webmmux::EbmlStream* pStream, uint32_t id)
 {
     assert(pStream);
     assert(id & 0x200000);  //always write 3 unsigned chars
@@ -342,7 +307,7 @@ void EbmlIO::WriteID3(EbmlIO::EbmlStream* pStream, unsigned long id)
 }
 
 
-void EbmlIO::WriteID2(EbmlIO::EbmlStream* pStream, unsigned short id)
+void webmmux::WriteID2(webmmux::EbmlStream* pStream, uint16_t id)
 {
     assert(pStream);
     assert(id & 0x4000);  //always write 2 unsigned chars
@@ -352,7 +317,7 @@ void EbmlIO::WriteID2(EbmlIO::EbmlStream* pStream, unsigned short id)
 }
 
 
-void EbmlIO::WriteID1(EbmlIO::EbmlStream* pStream, unsigned char id)
+void webmmux::WriteID1(webmmux::EbmlStream* pStream, uint8_t id)
 {
     assert(pStream);
     assert(id & 0x80);  //always write 1 unsigned char
@@ -362,8 +327,8 @@ void EbmlIO::WriteID1(EbmlIO::EbmlStream* pStream, unsigned char id)
 }
 
 
-void EbmlIO::Write1String(
-    EbmlIO::EbmlStream* pStream,
+void webmmux::Write1String(
+    webmmux::EbmlStream* pStream,
     const char* str)
 {
     assert(pStream);
@@ -372,7 +337,7 @@ void EbmlIO::Write1String(
     const size_t size_ = strlen(str);
     assert(size_ <= 255);
 
-    const unsigned char size = static_cast<unsigned char>(size_);
+    const uint8_t size = static_cast<unsigned char>(size_);
 
     Write1UInt(pStream, size);
     Write(pStream, str, size);
@@ -380,8 +345,8 @@ void EbmlIO::Write1String(
 
 
 #if 0
-void EbmlIO::Write1String(
-    EbmlIO::EbmlStream* pStream,
+void webmmux::Write1String(
+    webmmux::EbmlStream* pStream,
     const char* str,
     size_t buflen)
 {
@@ -398,7 +363,7 @@ void EbmlIO::Write1String(
     if (strlen_ >= buflen)
         return;
 
-    const unsigned char b = 0;
+    const uint8_t b = 0;
 
     const size_t count = buflen - strlen_;
 
@@ -409,19 +374,19 @@ void EbmlIO::Write1String(
 
 
 
-void EbmlIO::Write1UTF8(
-    EbmlIO::EbmlStream* pStream,
+void webmmux::Write1UTF8(
+    webmmux::EbmlStream* pStream,
     const wchar_t* str)
 {
     assert(pStream);
     assert(str);
 
-    const int cb = wcstombs(0, str, 0);
+    const int64_t cb = wcstombs(0, str, 0);
     assert(cb > 0);
 
     char* const buf = (char*)malloc(cb + 1);
 
-    const int n = wcstombs(buf, str, cb + 1);
+    const int64_t n = wcstombs(buf, str, cb + 1);
 
     assert(n == cb);
     assert(n > 0);
@@ -440,10 +405,10 @@ void EbmlIO::Write1UTF8(
 }
 
 
-void EbmlIO::Serialize(
-    EbmlIO::EbmlStream* pStream,
-    const unsigned char* p,
-    const unsigned char* q)
+void webmmux::Serialize(
+    webmmux::EbmlStream* pStream,
+    const uint8_t* p,
+    const uint8_t* q)
 {
     assert(pStream);
     assert(p);
@@ -454,21 +419,24 @@ void EbmlIO::Serialize(
     {
         --q;
 
-       pStream->write(q, 1);
-       assert(pStream->fail() == false);
+        uint32_t cbWritten;
+
+        const int res = pStream->Write(q, 1, &cbWritten);
+        assert(res);
+        assert(cbWritten == 1);
     }
 }
 
 
-void EbmlIO::Serialize(
-    EbmlIO::EbmlStream* pStream,
+void webmmux::Serialize(
+    webmmux::EbmlStream* pStream,
     const void* buf,
-    unsigned long len)
+    uint32_t len)
 {
     assert(buf);
 
-    const unsigned char* const p = static_cast<const unsigned char*>(buf);
-    const unsigned char* const q = p + len;
+    const uint8_t* const p = static_cast<const unsigned char*>(buf);
+    const uint8_t* const q = p + len;
 
     Serialize(pStream, p, q);
 }

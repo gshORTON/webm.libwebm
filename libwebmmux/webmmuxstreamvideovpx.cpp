@@ -11,7 +11,8 @@
 #include <cstring>
 #include "webmmuxcontext.hpp"
 #include "webmmuxstreamvideovpx.hpp"
-#ifdef _DEBUG
+#if 0 //def _DEBUG
+#include <iostream>
 //#include "odbgstream.hpp"
 using std::endl;
 using std::boolalpha;
@@ -36,7 +37,7 @@ StreamVideoVPx::VPxFrame::VPxFrame(
     m_pSample->pData = new unsigned char[pSample->bufLength];
     memcpy(m_pSample->pData, pSample->pData, pSample->bufLength);
 
-    long long st, sp;  //reftime units
+    long long st;  //reftime units
 
     st = m_pSample->startTime;
     assert(st >= 0);
@@ -56,7 +57,6 @@ StreamVideoVPx::VPxFrame::VPxFrame(
 
 StreamVideoVPx::VPxFrame::~VPxFrame()
 {
-    if (m_pSample->pData)
        delete[] m_pSample->pData;
 }
 
@@ -100,7 +100,7 @@ StreamVideoVPx::StreamVideoVPx(
 
 //void StreamVideoVPx::WriteTrackName()
 //{
-//    EbmlIO::File& f = m_context.m_file;
+//    webmmux::File& f = m_context.m_file;
 //
 //    f.WriteID2(0x536E);   //name
 //    f.Write1UTF8(L"VP8 video stream");  //TODO
@@ -110,7 +110,7 @@ StreamVideoVPx::StreamVideoVPx(
 
 void StreamVideoVPx::WriteTrackCodecID()
 {
-    EbmlIO::File& f = m_context.m_file;
+    webmmux::File& f = m_context.m_file;
 
     f.WriteID1(0x86);  //Codec ID
     f.Write1String("V_VP8");
@@ -119,7 +119,7 @@ void StreamVideoVPx::WriteTrackCodecID()
 
 void StreamVideoVPx::WriteTrackCodecName()
 {
-    EbmlIO::File& f = m_context.m_file;
+    webmmux::File& f = m_context.m_file;
 
     f.WriteID3(0x258688);  //Codec Name
     f.Write1UTF8(L"VP8");
@@ -128,12 +128,12 @@ void StreamVideoVPx::WriteTrackCodecName()
 
 void StreamVideoVPx::WriteTrackSettings()
 {
-    EbmlIO::File& f = m_context.m_file;
+    webmmux::File& f = m_context.m_file;
 
     f.WriteID1(0xE0);  //video settings
 
     //allocate 2 bytes of storage for size of settings
-    const long long begin_pos = f.SetPosition(2, std::ios_base::cur);
+    const long long begin_pos = f.SetPosition(2, webmmux::EBMLIO_SEEK_CURRENT);
 
 /*    const BITMAPINFOHEADER& bmih = GetBitmapInfoHeader();
     assert(bmih.biSize >= sizeof(BITMAPINFOHEADER));
@@ -212,7 +212,7 @@ int StreamVideoVPx::Receive(MediaSample* pSample)
     os << endl;
 #endif
 
-    EbmlIO::File& file = m_context.m_file;
+    webmmux::File& file = m_context.m_file;
 
     if (file.GetStream() == 0)
         return 0;

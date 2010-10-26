@@ -10,10 +10,10 @@ OUT = ../libwebm.a
 INCLUDES = -I. -I./common/
 
 # C++ compiler flags (-g -O2 -Wall)
-CCFLAGS = -g
+CCFLAGS = -g -Wall
 
 # compiler
-CCC = g++
+#CXX = g++
 
 # library paths
 #LIBS = -L../ -L/usr/local/lib -lm
@@ -28,7 +28,7 @@ LDFLAGS = -g
 default: $(OUT)
 
 .cpp.o:
-	$(CCC) $(INCLUDES) $(CCFLAGS) -c $< -o $@
+	$(CXX) $(INCLUDES) $(CCFLAGS) -c $< -o $@
 
 $(OUT): $(OBJ)
 	ar rcs $(OUT) $(OBJ)

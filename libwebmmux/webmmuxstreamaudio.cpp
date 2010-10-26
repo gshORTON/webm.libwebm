@@ -58,7 +58,7 @@ const void* StreamAudio::GetFormat(unsigned long& cb) const
 
 void StreamAudio::WriteTrackType()
 {
-    EbmlIO::File& f = m_context.m_file;
+    webmmux::File& f = m_context.m_file;
 
     f.WriteID1(0x83);     //TrackType ID
     f.Write1UInt(1);
@@ -68,12 +68,12 @@ void StreamAudio::WriteTrackType()
 
 void StreamAudio::WriteTrackSettings()
 {
-    EbmlIO::File& f = m_context.m_file;
+    webmmux::File& f = m_context.m_file;
 
     f.WriteID1(0xE1);  //Audio settings
 
     //allocate 2 bytes of storage for size of settings
-    const long long begin_pos = f.SetPosition(2, std::ios_base::cur);
+    const long long begin_pos = f.SetPosition(2, webmmux::EBMLIO_SEEK_CURRENT);
 
     //const WAVEFORMATEX& wfx = GetFormat();
     const unsigned long samples_per_sec_ = GetSamplesPerSec();
@@ -111,7 +111,7 @@ void StreamAudio::AudioFrame::Write(
     const Stream& s,
     ULONG cluster_timecode) const
 {
-    EbmlIO::File& file = s.m_context.m_file;
+    webmmux::File& file = s.m_context.m_file;
 
    //block = 1 byte ID + 4 byte size + f->size
    //block duration = 1 byte ID + 1 byte size + 1 byte value

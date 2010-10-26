@@ -12,7 +12,6 @@
 #include "webmmuxstream.hpp"
 #include "webmmuxcontext.hpp"
 
-
 namespace webmmux
 {
 
@@ -64,12 +63,12 @@ int Stream::GetTrackNumber() const
 
 void Stream::WriteTrackEntry(int tn)
 {
-    EbmlIO::File& f = m_context.m_file;
+    webmmux::File& f = m_context.m_file;
 
     f.WriteID1(0xAE);  //TrackEntry ID (level 2)
 
     //allocate 2 bytes for track entry size field
-    const long long begin_pos = f.SetPosition(2, std::ios_base::cur);
+    const long long begin_pos = f.SetPosition(2, EBMLIO_SEEK_CURRENT);
 
     WriteTrackNumber(tn);
     WriteTrackUID();
@@ -96,7 +95,7 @@ void Stream::WriteTrackEntry(int tn)
 
 void Stream::WriteTrackNumber(int tn_)
 {
-    EbmlIO::File& f = m_context.m_file;
+    webmmux::File& f = m_context.m_file;
 
     assert(tn_ > 0);
     assert(tn_ < 128);
@@ -113,7 +112,7 @@ void Stream::WriteTrackNumber(int tn_)
 
 void Stream::WriteTrackUID()
 {
-    EbmlIO::File& f = m_context.m_file;
+    webmmux::File& f = m_context.m_file;
 
     const TrackUID_t uid = CreateTrackUID();
 
@@ -186,7 +185,7 @@ void Stream::Frame::Write(
     const Stream& s,
     unsigned long cluster_timecode) const
 {
-    EbmlIO::File& file = s.m_context.m_file;
+    webmmux::File& file = s.m_context.m_file;
 
     const unsigned long block_size = 1 + 2 + 1 + GetSize();     //tn, tc, flg, f
 

@@ -7,8 +7,8 @@
 // be found in the AUTHORS file in the root of the source tree.
 
 #pragma once
-#include "webmmuxstreamvideo.hpp"
 #include <vector>
+#include "webmmuxstreamvideo.hpp"
 
 namespace webmmux
 {
@@ -36,7 +36,7 @@ class StreamVideoVPx : public StreamVideo
 public:
     StreamVideoVPx(Context&, const StreamInfo&);
 
-	int Receive(MediaSample*);
+    int Receive(MediaSample*);
     int EndOfStream();
 
 protected:

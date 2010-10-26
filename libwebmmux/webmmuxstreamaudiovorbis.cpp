@@ -6,10 +6,9 @@
 // in the file PATENTS.  All contributing project authors may
 // be found in the AUTHORS file in the root of the source tree.
 
-#include <cassert>
 #include <cstring>
+#include <cassert>
 #include <climits>
-//#include <uuids.h>
 #include "webmmuxcontext.hpp"
 #include "webmmuxstreamaudiovorbis.hpp"
 #include "vorbistypes.hpp"
@@ -229,7 +228,7 @@ StreamAudioVorbis::StreamAudioVorbis(
 
 void StreamAudioVorbis::WriteTrackCodecID()
 {
-    EbmlIO::File& f = m_context.m_file;
+    webmmux::File& f = m_context.m_file;
 
     f.WriteID1(0x86);  //Codec ID
     f.Write1String("A_VORBIS");
@@ -238,7 +237,7 @@ void StreamAudioVorbis::WriteTrackCodecID()
 
 void StreamAudioVorbis::WriteTrackCodecName()
 {
-    EbmlIO::File& f = m_context.m_file;
+    webmmux::File& f = m_context.m_file;
 
     f.WriteID3(0x258688);  //Codec Name
     f.Write1UTF8(L"VORBIS");
@@ -282,7 +281,7 @@ void StreamAudioVorbis::WriteTrackCodecPrivate()
     //1 unsigned char = comment len
     //(len of setup_len is implied by total len)
 
-    EbmlIO::File& file = m_context.m_file;
+    webmmux::File& file = m_context.m_file;
 
     file.WriteID2(0x63A2);  //Codec Private
     file.Write4UInt(len);
@@ -304,7 +303,7 @@ int StreamAudioVorbis::Receive(MediaSample* pSample)
 {
     assert(pSample);
 
-    EbmlIO::File& file = m_context.m_file;
+    webmmux::File& file = m_context.m_file;
 
     if (file.GetStream() == 0)
         return 0;

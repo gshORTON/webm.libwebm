@@ -75,7 +75,7 @@ void Context::SetAudioStream(StreamAudio* pAudio)
 
 
 
-void Context::Open(std::basic_iostream<unsigned char>* pStream)
+void Context::Open(webmmux::EbmlStream* pStream)
 {
     assert(m_file.GetStream() == 0);
     assert((m_pVideo == 0) || (m_pVideo->GetFrames().empty()));
@@ -178,7 +178,7 @@ void Context::WriteEbmlHeader()
     m_file.WriteID4(0x1A45DFA3);
 
     //Allocate 1 byte of storage for Ebml header size.
-    const long long start_pos = m_file.SetPosition(1, std::ios_base::cur);
+    const long long start_pos = m_file.SetPosition(1, webmmux::EBMLIO_SEEK_CURRENT);
 
     //EBML Version
 
@@ -216,7 +216,7 @@ void Context::WriteEbmlHeader()
 
     m_file.WriteID1(0xEC);  //Void element
     m_file.Write1UInt(9);
-    m_file.SetPosition(9, std::ios_base::cur);
+    m_file.SetPosition(9, webmmux::EBMLIO_SEEK_CURRENT);
 
     //Doc Type Version
 
@@ -280,7 +280,6 @@ void Context::FinalSegment()
 
     const unsigned long id = m_file.ReadID4();
     assert(id == 0x18538067);  //Segment ID
-    id;
 
     m_file.Write8UInt(size);  //total size of the segment
 
@@ -321,7 +320,7 @@ void Context::InitFirstSeekHead()
     m_file.WriteID4(0x114D9B74);  //Seek Head
     m_file.Write1UInt(size);
 
-    m_file.SetPosition(size, std::ios_base::cur);
+    m_file.SetPosition(size, webmmux::EBMLIO_SEEK_CURRENT);
 }
 
 
@@ -338,7 +337,6 @@ void Context::FinalFirstSeekHead()
     const long long stop_pos = m_file.GetPosition();
 
     const long long size = stop_pos - start_pos;
-    size;
     assert(size == ( /* 4 */ 3 * 21));
 }
 
@@ -349,7 +347,7 @@ void Context::WriteSecondSeekHead()
     m_file.WriteID4(0x114D9B74);  //Seek Head
 
     //start_pos = start of payload
-    const long long start_pos = m_file.SetPosition(4, std::ios_base::cur);
+    const long long start_pos = m_file.SetPosition(4, webmmux::EBMLIO_SEEK_CURRENT);
 
     clusters_t& cc = m_clusters;
 
@@ -429,7 +427,7 @@ void Context::InitInfo()
     m_file.WriteID4(0x1549A966);  //Segment Info ID
 
     //allocate 2 bytes of storage for size
-    const long long pos = m_file.SetPosition(2, std::ios_base::cur);
+    const long long pos = m_file.SetPosition(2, webmmux::EBMLIO_SEEK_CURRENT);
 
     m_file.WriteID3(0x2AD7B1);                //TimeCodeScale ID
     m_file.Write1UInt(4);                     //payload size
@@ -483,7 +481,7 @@ void Context::WriteTrack()
     m_file.WriteID4(0x1654AE6B);  //Tracks element (level 1)
 
     //allocate 2 bytes of storage for size of Tracks element (level 1)
-    const long long begin_pos = m_file.SetPosition(2, std::ios_base::cur);
+    const long long begin_pos = m_file.SetPosition(2, webmmux::EBMLIO_SEEK_CURRENT);
 
     int tn = 0;
 
@@ -520,7 +518,7 @@ void Context::Cluster::Final(
     const ULONG new_prev = static_cast<ULONG>(size_);
     const ULONG size = new_prev - 8;
 
-    EbmlIO::File& f = ctx.m_file;
+    webmmux::File& f = ctx.m_file;
 
     f.SetPosition(m_pos);
 
@@ -588,7 +586,7 @@ void Context::WriteCuePoint(
 {
     assert(m_pVideo);
 
-    EbmlIO::File& f = m_file;
+    webmmux::File& f = m_file;
 
     f.WriteID1(0xBB);  //CuePoint ID
     f.Write1UInt(28);  //payload size
@@ -655,7 +653,7 @@ void Context::WriteCues()
     m_file.WriteID4(0x1C53BB6B);   //Cues ID
 
     //allocate 4 bytes of storage for size of cues element
-    const long long start_pos = m_file.SetPosition(4, std::ios_base::cur);
+    const long long start_pos = m_file.SetPosition(4, webmmux::EBMLIO_SEEK_CURRENT);
 
     typedef clusters_t::const_iterator iter_t;
 
@@ -686,7 +684,6 @@ void Context::NotifyVideoFrame(
     StreamVideo* pVideo,
     StreamVideo::VideoFrame* pFrame)
 {
-    pVideo;
     assert(pVideo);
     assert(pVideo == m_pVideo);
     assert(pFrame);
@@ -764,7 +761,6 @@ void Context::NotifyAudioFrame(
     StreamAudio* pAudio,
     StreamAudio::AudioFrame* pFrame)
 {
-    pAudio;
     assert(pAudio);
     assert(pAudio == m_pAudio);
     assert(pFrame);
@@ -825,7 +821,6 @@ void Context::NotifyAudioFrame(
     assert(pvf0);
 
     const unsigned long vt0 = pvf0->GetTimecode();  //1st rframe
-    vt0;
 
     if (i == j)  //only one rframe in queue
         return;
@@ -1092,7 +1087,7 @@ void Context::CreateNewCluster(
 #if 0
     m_file.Write4UInt(0);         //patch size later, during close
 #else
-    m_file.SetPosition(4, std::ios_base::cur);
+    m_file.SetPosition(4, webmmux::EBMLIO_SEEK_CURRENT);
 #endif
 
     m_file.WriteID1(0xE7);
@@ -1249,7 +1244,7 @@ void Context::CreateNewClusterAudioOnly()
 #if 0
     m_file.Write4UInt(0);         //patch size later, during close
 #else
-    m_file.SetPosition(4, std::ios_base::cur);
+    m_file.SetPosition(4, webmmux::EBMLIO_SEEK_CURRENT);
 #endif
 
     m_file.WriteID1(0xE7);
@@ -1320,7 +1315,6 @@ void Context::WriteVideoFrame(Cluster& c, unsigned long& cFrames)
     assert(pf);
 
     StreamVideo::frames_t& rframes = m_pVideo->GetKeyFrames();
-    rframes;  //already popped
     assert(rframes.empty() || (pf != rframes.front()));
 
     assert(cFrames < ULONG_MAX);
