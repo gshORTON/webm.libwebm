@@ -8,6 +8,18 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "sample", "sample_2008.vcpro
 		{F9128EC6-C008-41AD-B38F-0E70D549D9F4} = {F9128EC6-C008-41AD-B38F-0E70D549D9F4}
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "webm_manifest", "webm_manifest\webm_manifest.vcproj", "{2EA8C1B5-F57C-4E8F-9C59-6A650B5F0326}"
+	ProjectSection(ProjectDependencies) = postProject
+		{F9128EC6-C008-41AD-B38F-0E70D549D9F4} = {F9128EC6-C008-41AD-B38F-0E70D549D9F4}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "webm_manifest_reader", "webm_manifest_reader\webm_manifest_reader.vcproj", "{CFFF66E7-24ED-4193-AB37-BA4CC3B2A317}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "webm_audio_cues_creator", "webm_audio_cues_creator\webm_audio_cues_creator.vcproj", "{9D5AE659-2492-4874-8EC4-C8F0B524B424}"
+	ProjectSection(ProjectDependencies) = postProject
+		{F9128EC6-C008-41AD-B38F-0E70D549D9F4} = {F9128EC6-C008-41AD-B38F-0E70D549D9F4}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -22,6 +34,18 @@ Global
 		{0CB5681F-6065-490C-98C8-05531732ED7E}.Debug|Win32.Build.0 = Debug|Win32
 		{0CB5681F-6065-490C-98C8-05531732ED7E}.Release|Win32.ActiveCfg = Release|Win32
 		{0CB5681F-6065-490C-98C8-05531732ED7E}.Release|Win32.Build.0 = Release|Win32
+		{2EA8C1B5-F57C-4E8F-9C59-6A650B5F0326}.Debug|Win32.ActiveCfg = Debug|Win32
+		{2EA8C1B5-F57C-4E8F-9C59-6A650B5F0326}.Debug|Win32.Build.0 = Debug|Win32
+		{2EA8C1B5-F57C-4E8F-9C59-6A650B5F0326}.Release|Win32.ActiveCfg = Release|Win32
+		{2EA8C1B5-F57C-4E8F-9C59-6A650B5F0326}.Release|Win32.Build.0 = Release|Win32
+		{CFFF66E7-24ED-4193-AB37-BA4CC3B2A317}.Debug|Win32.ActiveCfg = Debug|Win32
+		{CFFF66E7-24ED-4193-AB37-BA4CC3B2A317}.Debug|Win32.Build.0 = Debug|Win32
+		{CFFF66E7-24ED-4193-AB37-BA4CC3B2A317}.Release|Win32.ActiveCfg = Release|Win32
+		{CFFF66E7-24ED-4193-AB37-BA4CC3B2A317}.Release|Win32.Build.0 = Release|Win32
+		{9D5AE659-2492-4874-8EC4-C8F0B524B424}.Debug|Win32.ActiveCfg = Debug|Win32
+		{9D5AE659-2492-4874-8EC4-C8F0B524B424}.Debug|Win32.Build.0 = Debug|Win32
+		{9D5AE659-2492-4874-8EC4-C8F0B524B424}.Release|Win32.ActiveCfg = Release|Win32
+		{9D5AE659-2492-4874-8EC4-C8F0B524B424}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
