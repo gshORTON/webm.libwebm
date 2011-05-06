@@ -12,6 +12,9 @@
 #include "mkvreader.hpp"
 #include "mkvparser.hpp"
 
+int bufSize = 30*1024;
+unsigned char* pBuf = new unsigned char[bufSize];
+
 static const wchar_t* utf8towcs(const char* str)
 {
     if (str == NULL)
@@ -268,7 +271,54 @@ int main(int argc, char* argv[])
                 const Block::Frame& theFrame = pBlock->GetFrame(i);
                 const long size = theFrame.len;
                 const long long offset = theFrame.pos;
-                printf("\t\t\t %15ld,%15llx\n", size, offset);
+                printf("\t\t\t %15ld,%15llx", size, offset);
+
+                if (trackType == VIDEO_TRACK)
+                {
+                    if (size > bufSize)
+                    {
+                        delete [] pBuf;
+                        pBuf = new unsigned char[size+1024];
+                        if (!pBuf)
+                            return -1;
+                        bufSize = size+1024;
+                    }
+                    theFrame.Read(&reader, pBuf);
+
+                    //unsigned char flags = pBlock->GetFlags();
+                    const Block::Lacing lacing = pBlock->GetLacing();
+                    switch (lacing) {
+        		            case Block::kLacingNone: /* no lacing */
+                             printf(" no lacing   ");
+                             break;
+                        case Block::kLacingXiph: /* Xiph lacing */
+                             printf(" Xiph lacing ");
+                             break;
+                        case Block::kLacingFixed: /* fixed-size lacing */
+                             printf(" fixed lacing");
+                             break;
+                        case Block::kLacingEbml: /* EBML lacing */
+                             printf(" EBML lacing ");
+                             break;
+                    }
+
+                    //int vp8Key = (pBuf[0]) & 0x1;
+                    //printf(" (vp8):%s", vp8Key==0 ? "I" : "P");
+
+                    //printf(" flags:0x%x", flags);
+
+                    int vp8_type = !(pBuf[0] & 1);
+                    int vp8_version = (pBuf[0] >> 1) & 7;
+                    int show_frame = (pBuf[0] >> 4) & 1;
+                    int part_len = (pBuf[0] | (pBuf[1] << 8) | (pBuf[2] << 16)) >> 5;
+                    printf(" vp8_key:%d vp8_v:%d vp8_sf:%d vp8_pl:%d"
+                        , vp8_type
+                        , vp8_version
+                        , show_frame
+                        , part_len);
+                }
+
+                printf("\n");
             }
 
             pBlockEntry = pCluster->GetNext(pBlockEntry);
