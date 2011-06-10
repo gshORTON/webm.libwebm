@@ -11,6 +11,9 @@
 
 namespace mkvmuxer
 {
+//typedef long long          I64_t;
+//typedef unsigned long long U64_t;
+
 class IMkvWriter;
 
 // Returns a random number to be used for the Track UID.

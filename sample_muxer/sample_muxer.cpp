@@ -35,6 +35,11 @@ int main(int argc, char* argv[])
     return -1;
   }
 
+  if (!segment.AddAudioTrack(44100, 2)) {
+    printf("\n Could not add audio track.\n");
+    return -1;
+  }
+
   if (!segment.WriteSegmentHeader()) {
     printf("\n Could not write main Segment header.\n");
     return -1;

@@ -96,7 +96,6 @@ private:
   VideoTrack& operator=(const VideoTrack&);
 };
 
-/*
 class AudioTrack : public Track {
 public:
   AudioTrack();
@@ -124,7 +123,6 @@ private:
   AudioTrack(const AudioTrack&);
   AudioTrack& operator=(const AudioTrack&);
 };
-*/
 
 class SegmentInfo {
 public:
@@ -201,6 +199,7 @@ public:
   };
 
   bool AddVideoTrack(int width, int height);
+  bool AddAudioTrack(int sample_rate, int channels);
 
   bool WriteSegmentHeader();
 

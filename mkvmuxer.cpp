@@ -130,7 +130,6 @@ bool VideoTrack::Write(IMkvWriter* writer) const {
   return true;
 }
 
-/*
 AudioTrack::AudioTrack()
     : sample_rate_(0.0),
       channels_(1),
@@ -143,9 +142,13 @@ AudioTrack::~AudioTrack() {
 unsigned long long AudioTrack::Size() const {
   const unsigned long long parent_size = Track::Size();
 
-  unsigned long long size = EbmlElementSize(kMkvDepPixelWidth, width_, false);
-  size += EbmlElementSize(kMkvDepPixelHeight, height_, false);
-  size += EbmlElementSize(kMkvDepVideoSettings, size, true);
+  unsigned long long size = EbmlElementSize(kMkvSamplingFrequency,
+                                            static_cast<float>(sample_rate_),
+                                            false);
+  size += EbmlElementSize(kMkvChannels, channels_, false);
+  if (bit_depth_ > 0)
+    size += EbmlElementSize(kMkvBitDepth, bit_depth_, false);
+  size += EbmlElementSize(kMkvAudio, size, true);
 
   return parent_size + size;
 }
@@ -153,9 +156,13 @@ unsigned long long AudioTrack::Size() const {
 unsigned long long AudioTrack::PayloadSize() const {
   const unsigned long long parent_size = Track::PayloadSize();
 
-  unsigned long long size = EbmlElementSize(kMkvDepPixelWidth, width_, false);
-  size += EbmlElementSize(kMkvDepPixelHeight, height_, false);
-  size += EbmlElementSize(kMkvDepVideoSettings, size, true);
+  unsigned long long size = EbmlElementSize(kMkvSamplingFrequency,
+                                            static_cast<float>(sample_rate_),
+                                            false);
+  size += EbmlElementSize(kMkvChannels, channels_, false);
+  if (bit_depth_ > 0)
+    size += EbmlElementSize(kMkvBitDepth, bit_depth_, false);
+  size += EbmlElementSize(kMkvAudio, size, true);
 
   return parent_size + size;
 }
@@ -166,21 +173,30 @@ bool AudioTrack::Write(IMkvWriter* writer) const {
   if (!Track::Write(writer))
     return false;
 
-  // Calculate VideoSettings size.
-  unsigned long long size = EbmlElementSize(kMkvDepPixelWidth, width_, false);
-  size += EbmlElementSize(kMkvDepPixelHeight, height_, false);
+  // Calculate AudioSettings size.
+  unsigned long long size = EbmlElementSize(kMkvSamplingFrequency,
+                                            static_cast<float>(sample_rate_),
+                                            false);
+  size += EbmlElementSize(kMkvChannels, channels_, false);
+  if (bit_depth_ > 0)
+    size += EbmlElementSize(kMkvBitDepth, bit_depth_, false);
 
-  if (!WriteEbmlMasterElement(writer, kMkvDepVideoSettings, size))
+  if (!WriteEbmlMasterElement(writer, kMkvAudio, size))
     return false;
 
   const long long payload_position = writer->Position();
   if (payload_position < 0)
     return false;
 
-  if (!WriteEbmlElement(writer, kMkvDepPixelWidth, width_))
+  if (!WriteEbmlElement(writer,
+                        kMkvSamplingFrequency,
+                        static_cast<float>(sample_rate_)))
     return false;
-  if (!WriteEbmlElement(writer, kMkvDepPixelHeight, height_))
+  if (!WriteEbmlElement(writer, kMkvChannels, channels_))
     return false;
+  if (bit_depth_ > 0)
+    if (!WriteEbmlElement(writer, kMkvBitDepth, bit_depth_))
+      return false;
 
   const long long stop_position = writer->Position();
   if (stop_position < 0)
@@ -189,7 +205,6 @@ bool AudioTrack::Write(IMkvWriter* writer) const {
 
   return true;
 }
-*/
 
 Track::Track()
     : number_(0),
@@ -509,6 +524,21 @@ bool Segment::AddVideoTrack(int width, int height) {
   vid_track->height(height);
 
   m_tracks_.AddTrack(vid_track);
+
+  return true;
+}
+
+bool Segment::AddAudioTrack(int sample_rate, int channels) {
+  AudioTrack* aud_track = new (std::nothrow) AudioTrack();
+  if (!aud_track)
+    return false;
+
+  aud_track->type(Tracks::kAudio);
+  aud_track->codec_id("A_VORBIS");
+  aud_track->sample_rate(sample_rate);
+  aud_track->channels(channels);
+
+  m_tracks_.AddTrack(aud_track);
 
   return true;
 }
