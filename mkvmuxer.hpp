@@ -30,7 +30,7 @@ class IMkvWriter {
 
 // Writes out the EBML header for a WebM file. This function must be called
 // first before any other libwebm writing functions are called.
-bool WriteEbmlHeader(IMkvWriter* writer);
+bool WriteEbmlHeader(IMkvWriter* pWriter);
 
 class Track {
 public:
@@ -79,7 +79,6 @@ public:
 
   virtual unsigned long long Size() const;
   virtual unsigned long long PayloadSize() const;
-
   virtual bool Write(IMkvWriter* writer) const;
 
   unsigned long long width() const {return width_;}
@@ -98,30 +97,34 @@ private:
 };
 
 /*
-class AudioTrack : public Track
-{
-    AudioTrack(const AudioTrack&);
-    AudioTrack& operator=(const AudioTrack&);
-
+class AudioTrack : public Track {
 public:
-    AudioTrack(
-        Segment*,
-        const Info&,
-        long long element_start,
-        long long element_size);
-    double GetSamplingRate() const;
-    long long GetChannels() const;
-    long long GetBitDepth() const;
-    bool VetEntry(const BlockEntry*) const;
-    long Seek(long long time_ns, const BlockEntry*&) const;
+  AudioTrack();
+  virtual ~AudioTrack();
+
+  virtual unsigned long long Size() const;
+  virtual unsigned long long PayloadSize() const;
+  virtual bool Write(IMkvWriter* writer) const;
+
+  double sample_rate() const {return sample_rate_;}
+  void sample_rate(double sample_rate) {sample_rate_ = sample_rate;}
+
+  unsigned long long channels() const {return channels_;}
+  void channels(unsigned long long channels) {channels_ = channels;}
+
+  unsigned long long bit_depth() const {return bit_depth_;}
+  void bit_depth(unsigned long long bit_depth) {bit_depth_ = bit_depth;}
 
 private:
-    double m_rate;
-    long long m_channels;
-    long long m_bitDepth;
+  double sample_rate_;
+  unsigned long long channels_;
+  unsigned long long bit_depth_;
+
+  // DISALLOW_COPY_AND_ASSIGN
+  AudioTrack(const AudioTrack&);
+  AudioTrack& operator=(const AudioTrack&);
 };
 */
-
 
 class SegmentInfo {
 public:

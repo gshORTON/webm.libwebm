@@ -8,15 +8,6 @@
 
 #include "mkvmuxerutil.hpp"
 #include "mkvwriter.hpp"
-//#include <cstdlib>
-//#include <cstdio>
-//#include <cstddef>
-
-//#include <cassert>
-//#include <cstring>
-///#include <new>
-//#include <climits>
-
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,7 +36,6 @@ unsigned long long MakeTrackUID() {
 }
 
 int GetSerializeUIntSize(unsigned long long value) {
-  assert(value >= 0);
 
   if (value < 0x000000000000007FULL)
     return 1;
@@ -64,14 +54,30 @@ int GetSerializeUIntSize(unsigned long long value) {
   return 8;
 }
 
+int GetUIntSize(unsigned long long value) {
+
+  if (value < 0x0000000000000100ULL)
+    return 1;
+  else if (value < 0x0000000000010000ULL)
+    return 2;
+  else if (value < 0x0000000001000000ULL)
+    return 3;
+  else if (value < 0x0000001000000000ULL)
+    return 4;
+  else if (value < 0x0000100000000000ULL)
+    return 5;
+  else if (value < 0x0010000000000000ULL)
+    return 6;
+  else if (value < 0x1000000000000000ULL)
+    return 7;
+  return 8;
+}
+
 unsigned long long EbmlElementSize(unsigned long long type,
                                    unsigned long long value,
                                    bool master) {
-  assert(type >= 0);
-  assert(value >= 0);
-
   // Size of EBML ID
-  int ebml_size = GetSerializeUIntSize(type);
+  int ebml_size = GetUIntSize(type);
 
   // Datasize
   ebml_size += GetSerializeUIntSize(value);
@@ -86,10 +92,8 @@ unsigned long long EbmlElementSize(unsigned long long type,
 unsigned long long EbmlElementSize(unsigned long long type,
                                    float value,
                                    bool master) {
-  assert(type >= 0);
-
   // Size of EBML ID
-  int ebml_size = GetSerializeUIntSize(type);
+  int ebml_size = GetUIntSize(type);
 
   // Datasize
   ebml_size += 4;
@@ -104,11 +108,10 @@ unsigned long long EbmlElementSize(unsigned long long type,
 unsigned long long EbmlElementSize(unsigned long long type,
                                    const char* value,
                                    bool master) {
-  assert(type >= 0);
   assert(value != NULL);
 
   // Size of EBML ID
-  int ebml_size = GetSerializeUIntSize(type);
+  int ebml_size = GetUIntSize(type);
 
   // Datasize
   ebml_size += strlen(value);
@@ -119,28 +122,6 @@ unsigned long long EbmlElementSize(unsigned long long type,
 
   return ebml_size;
 }
-
-/*
-int GetSerializeUIntSize3(unsigned long long value) {
-  assert(value >= 0);
-
-  if (value >= 0x0001FFFFFFFFFFFFULL)
-    return 8;
-  else if (value >= 0x000003FFFFFFFFFFULL)
-    return 7;
-  else if (value >= 0x00000007FFFFFFFFULL)
-    return 6;
-  else if (value >= 0x000000000FFFFFFFULL)
-    return 5;
-  else if (value >= 0x00000000001FFFFFULL)
-    return 4;
-  else if (value >= 0x0000000000003FFFULL)
-    return 3;
-  else if (value >= 0x000000000000007FULL)
-    return 2;
-  return 1;
-}
-*/
 
 int SerializeInt(
     IMkvWriter* pWriter,
@@ -190,42 +171,6 @@ int SerializeFloat(IMkvWriter* pWriter, float f) {
 
 int WriteUInt(
     IMkvWriter* pWriter,
-    long long value,
-    int size) {
-  assert(pWriter);
-  assert(value >= 0);
-  assert(size >= 0);
-
-  if (size > 0) {
-    assert(size <= 8);
-
-    const long long bit = 1LL << (size * 7);
-    assert(value <= (bit - 2));
-
-    value |= bit;
-  } else {
-    size = 1;
-    long long bit;
-
-    for (;;) {
-      bit = 1LL << (size * 7);
-      const long long max = bit - 2;
-
-      if (value <= max)
-        break;
-
-      ++size;
-    }
-
-    assert(size <= 8);
-    value |= bit;
-  }
-
-  return SerializeInt(pWriter, value, size);
-}
-
-int WriteUInt2(
-    IMkvWriter* pWriter,
     unsigned long long value) {
   assert(pWriter);
   assert(value >= 0);
@@ -259,17 +204,22 @@ int WriteUInt2(
   return SerializeInt(pWriter, value, size);
 }
 
+int WriteID(IMkvWriter* pWriter, unsigned long long type) {
+  assert(pWriter);
+  const int size = GetUIntSize(type);
+
+  return SerializeInt(pWriter, type, size);
+}
+
 bool WriteEbmlMasterElement(IMkvWriter* pWriter,
-                            unsigned long long value,
+                            unsigned long long type,
                             unsigned long long size) {
   assert(pWriter);
-  assert(value >= 0);
-  assert(size >= 0);
 
-  if (WriteUInt2(pWriter, value))
+  if (WriteID(pWriter, type))
     return false;
 
-  if (WriteUInt2(pWriter, size))
+  if (WriteUInt(pWriter, size))
     return false;
 
   return true;
@@ -279,16 +229,12 @@ bool WriteEbmlElement(IMkvWriter* pWriter,
                       unsigned long long type,
                       unsigned long long value) {
   assert(pWriter);
-  assert(type >= 0);
-  assert(value >= 0);
 
-  //const unsigned long long size = EbmlElementSize(type, value, false);
-  const unsigned long long size = GetSerializeUIntSize(value);
-
-  if (WriteUInt2(pWriter, type))
+  if (WriteID(pWriter, type))
     return false;
 
-  if (WriteUInt2(pWriter, size))
+  const unsigned long long size = GetSerializeUIntSize(value);
+  if (WriteUInt(pWriter, size))
     return false;
 
   if (SerializeInt(pWriter, value, static_cast<int>(size)))
@@ -301,12 +247,11 @@ bool WriteEbmlElement(IMkvWriter* pWriter,
                       unsigned long long type,
                       float value) {
   assert(pWriter);
-  assert(type >= 0);
 
-  if (WriteUInt2(pWriter, type))
+  if (WriteID(pWriter, type))
     return false;
 
-  if (WriteUInt2(pWriter, 4))
+  if (WriteUInt(pWriter, 4))
     return false;
 
   if (SerializeFloat(pWriter, value))
@@ -319,16 +264,16 @@ bool WriteEbmlElement(IMkvWriter* pWriter,
                       unsigned long long type,
                       const char* value) {
   assert(pWriter);
-  assert(type >= 0);
-  assert(value >= 0);
+  assert(value != NULL);
 
-  if (WriteUInt2(pWriter, type))
+  if (WriteID(pWriter, type))
     return false;
 
-  if (WriteUInt2(pWriter, strlen(value)))
+  const int length = strlen(value);
+  if (WriteUInt(pWriter, length))
     return false;
 
-  if (pWriter->Write(value, strlen(value)))
+  if (pWriter->Write(value, length))
     return false;
 
   return true;

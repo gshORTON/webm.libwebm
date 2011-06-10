@@ -8,6 +8,7 @@
 
 #include "mkvmuxer.hpp"
 #include "mkvmuxerutil.hpp"
+#include "webmids.hpp"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,35 +27,29 @@ IMkvWriter::~IMkvWriter() {
 
 bool WriteEbmlHeader(IMkvWriter* pWriter) {
   // Level 0
+  unsigned long long size = EbmlElementSize(kMkvEBMLVersion, 1ULL, false);
+  size += EbmlElementSize(kMkvEBMLReadVersion, 1ULL, false);
+  size += EbmlElementSize(kMkvEBMLMaxIDLength, 4ULL, false);
+  size += EbmlElementSize(kMkvEBMLMaxSizeLength, 8ULL, false);
+  size += EbmlElementSize(kMkvDocType, "webm", false);
+  size += EbmlElementSize(kMkvDocTypeVersion, 2ULL, false);
+  size += EbmlElementSize(kMkvDocTypeReadVersion, 2ULL, false);
 
-  const unsigned long long kEbmlId = 0x0A45DFA3ULL;
-  const unsigned long long kEbmlVersion = 0x0286ULL;
-  const unsigned long long kEbmlReadVersion = 0x02F7ULL;
-  const unsigned long long kEbmlMaxIdLength = 0x02F2ULL;
-  const unsigned long long kEbmlMaxSizeLength = 0x02F3ULL;
-  const unsigned long long kEbmlVoid = 0x6CULL;
-  const unsigned long long kEbmlDocType = 0x0282ULL;
-  const unsigned long long kEbmlDocTypeVersion = 0x0287ULL;
-  const unsigned long long kEbmlDocTypeReadVersion = 0x0285ULL;
-
-  // TODO: Generate size.
-  const long long size = 42;  // Douglas Adams is smiling
-
-
-  if (!WriteEbmlMasterElement(pWriter, kEbmlId, size))
+  if (!WriteEbmlMasterElement(pWriter, kMkvEBML, size))
     return false;
 
-  if (!WriteEbmlElement(pWriter, kEbmlVersion, 1ULL))
+  if (!WriteEbmlElement(pWriter, kMkvEBMLVersion, 1ULL))
     return false;
-  if (!WriteEbmlElement(pWriter, kEbmlReadVersion, 1ULL))
+  if (!WriteEbmlElement(pWriter, kMkvEBMLReadVersion, 1ULL))
     return false;
-  if (!WriteEbmlElement(pWriter, kEbmlMaxIdLength, 4ULL))
+  if (!WriteEbmlElement(pWriter, kMkvEBMLMaxIDLength, 4ULL))
     return false;
-  if (!WriteEbmlElement(pWriter, kEbmlMaxSizeLength, 8ULL))
+  if (!WriteEbmlElement(pWriter, kMkvEBMLMaxSizeLength, 8ULL))
     return false;
-  if (!WriteEbmlElement(pWriter, kEbmlDocType, "webm"))
+  if (!WriteEbmlElement(pWriter, kMkvDocType, "webm"))
     return false;
 
+  /*
   // Void element (11 bytes total)
   if (WriteUInt(pWriter, 0x6C, 1))  // Void element
     return false;
@@ -67,10 +62,11 @@ bool WriteEbmlHeader(IMkvWriter* pWriter) {
     if (pWriter->Write(&c, 1))
       return false;
   }
+  */
 
-  if (!WriteEbmlElement(pWriter, kEbmlDocTypeVersion, 2ULL))
+  if (!WriteEbmlElement(pWriter, kMkvDocTypeVersion, 2ULL))
     return false;
-  if (!WriteEbmlElement(pWriter, kEbmlDocTypeReadVersion, 2ULL))
+  if (!WriteEbmlElement(pWriter, kMkvDocTypeReadVersion, 2ULL))
     return false;
 
   return true;
@@ -89,7 +85,7 @@ unsigned long long VideoTrack::Size() const {
 
   unsigned long long size = EbmlElementSize(kMkvPixelWidth, width_, false);
   size += EbmlElementSize(kMkvPixelHeight, height_, false);
-  size += EbmlElementSize(kMkvVideoSettings, size, true);
+  size += EbmlElementSize(kMkvVideo, size, true);
 
   return parent_size + size;
 }
@@ -99,7 +95,7 @@ unsigned long long VideoTrack::PayloadSize() const {
 
   unsigned long long size = EbmlElementSize(kMkvPixelWidth, width_, false);
   size += EbmlElementSize(kMkvPixelHeight, height_, false);
-  size += EbmlElementSize(kMkvVideoSettings, size, true);
+  size += EbmlElementSize(kMkvVideo, size, true);
 
   return parent_size + size;
 }
@@ -114,7 +110,7 @@ bool VideoTrack::Write(IMkvWriter* writer) const {
   unsigned long long size = EbmlElementSize(kMkvPixelWidth, width_, false);
   size += EbmlElementSize(kMkvPixelHeight, height_, false);
 
-  if (!WriteEbmlMasterElement(writer, kMkvVideoSettings, size))
+  if (!WriteEbmlMasterElement(writer, kMkvVideo, size))
     return false;
 
   const long long payload_position = writer->Position();
@@ -133,6 +129,67 @@ bool VideoTrack::Write(IMkvWriter* writer) const {
 
   return true;
 }
+
+/*
+AudioTrack::AudioTrack()
+    : sample_rate_(0.0),
+      channels_(1),
+      bit_depth_(0) {
+}
+
+AudioTrack::~AudioTrack() {
+}
+
+unsigned long long AudioTrack::Size() const {
+  const unsigned long long parent_size = Track::Size();
+
+  unsigned long long size = EbmlElementSize(kMkvDepPixelWidth, width_, false);
+  size += EbmlElementSize(kMkvDepPixelHeight, height_, false);
+  size += EbmlElementSize(kMkvDepVideoSettings, size, true);
+
+  return parent_size + size;
+}
+
+unsigned long long AudioTrack::PayloadSize() const {
+  const unsigned long long parent_size = Track::PayloadSize();
+
+  unsigned long long size = EbmlElementSize(kMkvDepPixelWidth, width_, false);
+  size += EbmlElementSize(kMkvDepPixelHeight, height_, false);
+  size += EbmlElementSize(kMkvDepVideoSettings, size, true);
+
+  return parent_size + size;
+}
+
+bool AudioTrack::Write(IMkvWriter* writer) const {
+  assert(writer);
+
+  if (!Track::Write(writer))
+    return false;
+
+  // Calculate VideoSettings size.
+  unsigned long long size = EbmlElementSize(kMkvDepPixelWidth, width_, false);
+  size += EbmlElementSize(kMkvDepPixelHeight, height_, false);
+
+  if (!WriteEbmlMasterElement(writer, kMkvDepVideoSettings, size))
+    return false;
+
+  const long long payload_position = writer->Position();
+  if (payload_position < 0)
+    return false;
+
+  if (!WriteEbmlElement(writer, kMkvDepPixelWidth, width_))
+    return false;
+  if (!WriteEbmlElement(writer, kMkvDepPixelHeight, height_))
+    return false;
+
+  const long long stop_position = writer->Position();
+  if (stop_position < 0)
+    return false;
+  assert(stop_position - payload_position == size);
+
+  return true;
+}
+*/
 
 Track::Track()
     : number_(0),
@@ -166,7 +223,7 @@ unsigned long long Track::PayloadSize() const {
   size += EbmlElementSize(kMkvTrackUID, uid_, false);
   size += EbmlElementSize(kMkvTrackType, type_, false);
   if (codec_id_)
-    size += EbmlElementSize(kMkvTrackCodec, codec_id_, false);
+    size += EbmlElementSize(kMkvCodecID, codec_id_, false);
   //if (codec_private_)
   //  size += EbmlElementSize(, codec_private_, false);
 
@@ -183,6 +240,16 @@ bool Track::Write(IMkvWriter* writer) const {
   if (!WriteEbmlMasterElement(writer, kMkvTrackEntry, size))
     return false;
 
+  unsigned long long test = EbmlElementSize(kMkvTrackNumber, number_, false);
+  test += EbmlElementSize(kMkvTrackUID, uid_, false);
+  test += EbmlElementSize(kMkvTrackType, type_, false);
+  if (codec_id_)
+    test += EbmlElementSize(kMkvCodecID, codec_id_, false);
+
+  const long long payload_position = writer->Position();
+  if (payload_position < 0)
+    return false;
+
   if (!WriteEbmlElement(writer, kMkvTrackNumber, number_))
     return false;
   if (!WriteEbmlElement(writer, kMkvTrackUID, uid_))
@@ -190,9 +257,14 @@ bool Track::Write(IMkvWriter* writer) const {
   if (!WriteEbmlElement(writer, kMkvTrackType, type_))
     return false;
   if (codec_id_) {
-    if (!WriteEbmlElement(writer, kMkvTrackCodec, codec_id_))
+    if (!WriteEbmlElement(writer, kMkvCodecID, codec_id_))
       return false;
   }
+
+  const long long stop_position = writer->Position();
+  if (stop_position < 0)
+    return false;
+  assert(stop_position - payload_position == test);
 
   return true;
 }
@@ -285,20 +357,20 @@ bool SegmentInfo::Write(IMkvWriter* writer) const {
   if (!muxing_app_ || !writing_app_)
     return false;
 
-  unsigned long long size = EbmlElementSize(kMkvTimeCodeScale, timecode_scale_, false);
+  unsigned long long size = EbmlElementSize(kMkvTimecodeScale, timecode_scale_, false);
   if (duration_ > 0.0)
     size += EbmlElementSize(kMkvDuration, static_cast<float>(duration_), false);
   size += EbmlElementSize(kMkvMuxingApp, muxing_app_, false);
   size += EbmlElementSize(kMkvWritingApp, writing_app_, false);
 
-  if (!WriteEbmlMasterElement(writer, kMkvSegmentInfo, size))
+  if (!WriteEbmlMasterElement(writer, kMkvInfo, size))
     return false;
 
   const long long payload_position = writer->Position();
   if (payload_position < 0)
     return false;
 
-  if (!WriteEbmlElement(writer, kMkvTimeCodeScale, timecode_scale_))
+  if (!WriteEbmlElement(writer, kMkvTimecodeScale, timecode_scale_))
     return false;
   if (duration_ > 0.0)
     if (!WriteEbmlElement(writer, kMkvDuration, static_cast<float>(duration_)))
@@ -442,7 +514,7 @@ bool Segment::AddVideoTrack(int width, int height) {
 }
 
 bool Segment::WriteSegmentHeader() {
-  if (WriteUInt(writer_, kMkvSegment, 4)) {
+  if (SerializeInt(writer_, kMkvSegment, 4)) {
     return false;
   }
 

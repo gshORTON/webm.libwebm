@@ -163,6 +163,14 @@
 			<File
 				RelativePath=".\tester.cpp"
 				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+					/>
+				</FileConfiguration>
 			</File>
 		</Filter>
 		<Filter
@@ -180,6 +188,10 @@
 			</File>
 			<File
 				RelativePath=".\mkvwriter.hpp"
+				>
+			</File>
+			<File
+				RelativePath=".\webmids.hpp"
 				>
 			</File>
 		</Filter>

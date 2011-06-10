@@ -13,33 +13,14 @@ namespace mkvmuxer
 {
 class IMkvWriter;
 
-// TODO Change these so the values match the WebM spec!!!!
-enum MkvId {
-  kMkvSegment = 0x08538067,
-  kMkvSegmentInfo = 0x0549A966,
-  kMkvTimeCodeScale = 0x0AD7B1,
-  kMkvDuration = 0x0489,
-  kMkvMuxingApp = 0x0D80,
-  kMkvWritingApp = 0x1741,
-  kMkvTracks = 0x0654AE6B,
-  kMkvTrackEntry = 0x2E,
-  kMkvTrackNumber = 0x57,
-  kMkvTrackType = 0x03,
-  kMkvTrackCodec = 0x06,
-  kMkvVideoSettings = 0x60,
-  kMkvPixelWidth = 0x30,
-  kMkvPixelHeight = 0x3A,
-  kMkvCluster = 0x0F43B675,
-  kMkvTimeCode = 0x67,
-  kMkvSimpleBlock = 0x23,
-  kMkvTrackUID = 0x33C5
-};
-
 // Returns a random number to be used for the Track UID.
 unsigned long long MakeTrackUID();
 
-int GetSerializeUIntSize(unsigned long long value);
+// Creates an EBML encoded value from |value| and |size|. Returns 0 on success. 
+int SerializeInt(IMkvWriter* writer, long long value, int size);
 
+// Returns the size in bytes of the element. |master| must be set to true if
+// the element is an Mkv master element.
 unsigned long long EbmlElementSize(unsigned long long type,
                                    unsigned long long value,
                                    bool master);
@@ -49,14 +30,12 @@ unsigned long long EbmlElementSize(unsigned long long type,
 unsigned long long EbmlElementSize(unsigned long long type,
                                    const char* value,
                                    bool master);
-
-int SerializeInt(IMkvWriter* writer, long long value, int size);
-int SerializeFloat(IMkvWriter* writer, float value);
-int WriteUInt(IMkvWriter* writer, long long value, int size);
-
+// Output an Mkv master element. Returns true if the element was written.
 bool WriteEbmlMasterElement(IMkvWriter* pWriter,
                             unsigned long long value,
                             unsigned long long size);
+
+// Output an Mkv non-master element. Returns true if the element was written.
 bool WriteEbmlElement(IMkvWriter* pWriter,
                       unsigned long long type,
                       unsigned long long value);
@@ -67,6 +46,8 @@ bool WriteEbmlElement(IMkvWriter* pWriter,
                       unsigned long long type,
                       const char* value);
 
+// Returns the version number of the muxer in |major|, |minor|, |build|,
+// and |revision|.
 void GetVersion(int& major, int& minor, int& build, int& revision);
 
 }  //end namespace mkvmuxer
