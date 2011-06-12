@@ -502,21 +502,62 @@ bool Tracks::Write(IMkvWriter* writer) const {
   return true;
 }
 
+Cluster::Cluster(unsigned long long timecode)
+: timecode_(timecode),
+  size_position_(-1),
+  payload_size_(0) {
+}
+
+Cluster::~Cluster() {
+}
+
+void Cluster::AddPayloadSize(unsigned long long size) {
+  payload_size_ += size;
+}
+
 Segment::Segment(IMkvWriter* writer)
-    : writer_(writer) {
+: writer_(writer),
+  cluster_list_size_(0),
+  cluster_list_capacity_(0),
+  cluster_list_(NULL),
+  new_cluster_(true) {
   assert(writer_);
 
   // TODO: Create an Init function for Segment.
   segment_info_.Init();
 }
 
-Segment::~Segment() {
+Segment::~Segment() { 
 }
 
-bool Segment::AddVideoTrack(int width, int height) {
+bool Segment::Finalize() {
+  if (cluster_list_size_ > 1) {
+    // Update last cluster's size
+    Cluster* old_cluster = cluster_list_[cluster_list_size_-1];
+    assert(old_cluster);
+    assert(old_cluster->size_position() != -1);
+
+    if (writer_->Seekable()) {
+      const long long pos = writer_->Position();
+
+      if (writer_->Position(old_cluster->size_position()))
+        return false;
+
+      if (WriteUIntSize(writer_, old_cluster->payload_size(), 8))
+        return false;
+
+      if (writer_->Position(pos))
+        return false;
+    }
+  }
+
+  return true;
+}
+
+unsigned long long Segment::AddVideoTrack(int width, int height) {
   VideoTrack* vid_track = new (std::nothrow) VideoTrack();
   if (!vid_track)
-    return false;
+    return 0;
 
   vid_track->type(Tracks::kVideo);
   vid_track->codec_id("V_VP8");
@@ -525,13 +566,13 @@ bool Segment::AddVideoTrack(int width, int height) {
 
   m_tracks_.AddTrack(vid_track);
 
-  return true;
+  return vid_track->number();
 }
 
-bool Segment::AddAudioTrack(int sample_rate, int channels) {
+unsigned long long Segment::AddAudioTrack(int sample_rate, int channels) {
   AudioTrack* aud_track = new (std::nothrow) AudioTrack();
   if (!aud_track)
-    return false;
+    return 0;
 
   aud_track->type(Tracks::kAudio);
   aud_track->codec_id("A_VORBIS");
@@ -540,19 +581,127 @@ bool Segment::AddAudioTrack(int sample_rate, int channels) {
 
   m_tracks_.AddTrack(aud_track);
 
+  return aud_track->number();
+}
+
+bool Segment::AddFrame(unsigned char* frame,
+                       unsigned long long length,
+                       unsigned long long track_number,
+                       unsigned long long timestamp,
+                       bool is_key) {
+  assert(frame);
+  assert(length >= 0);
+  assert(track_number >= 0);
+
+  if (is_key)
+    new_cluster_ = true;
+
+  if (new_cluster_) {
+    const int new_size = cluster_list_size_ + 1;
+
+    if (new_size > cluster_list_capacity_) {
+      const int new_capacity =
+        (!cluster_list_capacity_)? 2 : cluster_list_capacity_*2;
+
+      assert(new_capacity > 0);
+      Cluster** clusters = new (std::nothrow) Cluster*[new_capacity];
+      if (!clusters)
+        return false;
+
+      for (int i=0; i<cluster_list_size_; ++i) {
+        clusters[i] = cluster_list_[i];
+      }
+
+      delete [] cluster_list_;
+
+      cluster_list_ = clusters;
+      cluster_list_capacity_ = new_capacity;
+    }
+
+    const unsigned long long timecode = timestamp / segment_info_.timecode_scale();
+    
+    // TODO: Add checks here to make sure the timestamps passed in are valid.
+
+    cluster_list_[cluster_list_size_] = new (std::nothrow) Cluster(timecode);
+    if (!cluster_list_[cluster_list_size_])
+      return false;
+    cluster_list_size_ = new_size;
+
+    // TODO: In file mode need to add code to bakcup and update old cluster
+    //       size.
+    if (cluster_list_size_ > 1) {
+      // Update old cluster's size
+      Cluster* old_cluster = cluster_list_[cluster_list_size_-2];
+      assert(old_cluster);
+      assert(old_cluster->size_position() != -1);
+
+      if (writer_->Seekable()) {
+        const long long pos = writer_->Position();
+
+        if (writer_->Position(old_cluster->size_position()))
+          return false;
+
+        if (WriteUIntSize(writer_, old_cluster->payload_size(), 8))
+          return false;
+
+        if (writer_->Position(pos))
+          return false;
+      }
+    }
+
+    if (SerializeInt(writer_, kMkvCluster, 4))
+      return false;
+
+    Cluster* cluster = cluster_list_[cluster_list_size_-1];
+    assert(cluster);
+
+    // Save for later.
+    cluster->size_position(writer_->Position());
+
+    // Write "unknown" (-1) as cluster size value. We need to write 8 bytes
+    // because we do not know how big our cluster will be.
+    if (SerializeInt(writer_, -1, 8))
+      return false;
+
+    if (!WriteEbmlElement(writer_, kMkvTimecode, cluster->timecode()))
+      return false;
+    cluster->AddPayloadSize(EbmlElementSize(kMkvTimecode,
+                                            cluster->timecode(),
+                                            false));
+
+    new_cluster_ = false;
+  }
+
+  assert(cluster_list_size_ > 0);
+  Cluster* current_cluster = cluster_list_[cluster_list_size_-1];
+  assert(current_cluster);
+
+  long long block_timecode = timestamp / segment_info_.timecode_scale();
+  block_timecode -= static_cast<long long>(current_cluster->timecode());
+  assert(block_timecode >= 0);
+
+  const unsigned long long element_size =
+    WriteSimpleBlock(writer_,
+                     frame,
+                     length,
+                     static_cast<char>(track_number),
+                     static_cast<short>(block_timecode),
+                     is_key);
+  if (!element_size)
+    return false;
+
+  current_cluster->AddPayloadSize(element_size);
+
   return true;
 }
 
 bool Segment::WriteSegmentHeader() {
-  if (SerializeInt(writer_, kMkvSegment, 4)) {
-    return false;
-  }
-
   // Write "unknown" (-1) as segment size value. If mode is kFile, Segment
   // will write over duration when the file is finalized.
-  if (SerializeInt(writer_, -1, 1)) {
+  if (SerializeInt(writer_, kMkvSegment, 4))
     return false;
-  }
+  if (SerializeInt(writer_, -1, 1))
+    return false;
 
   if (!segment_info_.Write(writer_))
     return false;

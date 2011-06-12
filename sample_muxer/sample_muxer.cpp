@@ -12,6 +12,8 @@
 #include "mkvwriter.hpp"
 #include "mkvmuxerutil.hpp"
 
+#include <string.h>
+
 int main(int argc, char* argv[])
 {
   using namespace mkvmuxer;
@@ -30,20 +32,39 @@ int main(int argc, char* argv[])
 
   Segment segment(&writer);
 
-  if (!segment.AddVideoTrack(320, 240)) {
+  const unsigned long long vid_track = segment.AddVideoTrack(320, 240);
+  if (!vid_track) {
     printf("\n Could not add video track.\n");
     return -1;
   }
 
+  /*
   if (!segment.AddAudioTrack(44100, 2)) {
     printf("\n Could not add audio track.\n");
     return -1;
   }
+  */
 
   if (!segment.WriteSegmentHeader()) {
     printf("\n Could not write main Segment header.\n");
     return -1;
   }
+
+  unsigned char video_frame[36];
+  const unsigned int length = strlen("When roses are red, Bats are cool.") + 1;
+  memcpy(video_frame, "When roses are red, Bats are cool.", length);
+
+  for (int i=0; i<300; ++i) {
+    const unsigned long long timestamp = (i * 1000000000ULL) / 30ULL;
+    const bool is_key = ((i+1) % 2) ? true : false;
+
+    if (!segment.AddFrame(video_frame, length, vid_track, timestamp, is_key)) {
+      printf("\n Could not add video frame #%d.\n", i);
+      return -1;
+    }
+  }
+
+  segment.Finalize();
 
   return 0;
 }

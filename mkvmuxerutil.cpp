@@ -8,6 +8,7 @@
 
 #include "mkvmuxerutil.hpp"
 #include "mkvwriter.hpp"
+#include "webmids.hpp"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,7 +36,7 @@ unsigned long long MakeTrackUID() {
   return track_uid;
 }
 
-int GetSerializeUIntSize(unsigned long long value) {
+int GetCodedUIntSize(unsigned long long value) {
 
   if (value < 0x000000000000007FULL)
     return 1;
@@ -80,7 +81,7 @@ unsigned long long EbmlElementSize(unsigned long long type,
   int ebml_size = GetUIntSize(type);
 
   // Datasize
-  ebml_size += GetSerializeUIntSize(value);
+  ebml_size += GetUIntSize(value);
 
   // Size of Datasize
   if (!master)
@@ -174,7 +175,18 @@ int WriteUInt(
     unsigned long long value) {
   assert(pWriter);
   assert(value >= 0);
-  int size = GetSerializeUIntSize(value);
+  int size = GetCodedUIntSize(value);
+
+  return WriteUIntSize(pWriter, value, size);
+}
+
+int WriteUIntSize(
+    IMkvWriter* pWriter,
+    unsigned long long value,
+    int size) {
+  assert(pWriter);
+  assert(value >= 0);
+  assert(size >= 0);
 
   if (size > 0) {
     assert(size <= 8);
@@ -233,7 +245,7 @@ bool WriteEbmlElement(IMkvWriter* pWriter,
   if (WriteID(pWriter, type))
     return false;
 
-  const unsigned long long size = GetSerializeUIntSize(value);
+  const unsigned long long size = GetUIntSize(value);
   if (WriteUInt(pWriter, size))
     return false;
 
@@ -277,6 +289,47 @@ bool WriteEbmlElement(IMkvWriter* pWriter,
     return false;
 
   return true;
+}
+
+unsigned long long WriteSimpleBlock(IMkvWriter* pWriter,
+                      const unsigned char* data,
+                      unsigned long long length,
+                      char track_number,
+                      short timestamp,
+                      bool is_key) {
+  assert(pWriter);
+  assert(data != NULL);
+  assert(length > 0);
+  assert(track_number > 0 && track_number < 128);
+  assert(timestamp >= 0);
+
+  if (WriteID(pWriter, kMkvSimpleBlock))
+    return 0;
+
+  const int size = static_cast<int>(length) + 4;
+  if (WriteUInt(pWriter, size))
+    return 0;
+
+  if (WriteUInt(pWriter, static_cast<unsigned long long>(track_number)))
+    return 0;
+
+  if (SerializeInt(pWriter, static_cast<unsigned long long>(timestamp), 2))
+    return 0;
+
+  unsigned long long flags = 0;
+  if(is_key)
+    flags |= 0x80;
+
+  if (SerializeInt(pWriter, flags, 1))
+    return 0;
+
+  if (pWriter->Write(data, static_cast<unsigned long>(length)))
+    return 0;
+
+  const unsigned long long element_size =
+    GetUIntSize(kMkvSimpleBlock) + GetCodedUIntSize(length) + 4 + length;
+
+  return element_size;
 }
 
 void GetVersion(int& major, int& minor, int& build, int& revision)

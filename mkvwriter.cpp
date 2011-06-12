@@ -42,12 +42,9 @@ bool MkvWriter::Open(const char* filename) {
     return false;
 
 #ifdef WIN32
-  //errno_t err;
-  //if((err = fopen_s(&file_, filename, "w")) !=0)
-  //  file_ = NULL;
-  file_ = _fsopen(filename, "w", _SH_DENYWR);
+  file_ = _fsopen(filename, "wb", _SH_DENYWR);
 #else
-  file_ = fopen(filename, "w");
+  file_ = fopen(filename, "wb");
 #endif
   if (file_ == NULL)
     return false;
@@ -68,6 +65,19 @@ long long MkvWriter::Position() const {
 #else
     return ftell(file_);
 #endif
+}
+
+int MkvWriter::Position(long long position) {
+  assert(file_);
+#ifdef WIN32
+    return _fseeki64(file_, position, SEEK_SET);
+#else
+    return fseek(file_, position, SEEK_SET);
+#endif
+}
+
+bool MkvWriter::Seekable() const {
+  return true;
 }
 
 }  // namespace mkvmuxer

@@ -24,6 +24,9 @@ public:
     // IMkvWriter Implementation
     virtual int Write(const void* buffer, unsigned long length);
     virtual long long Position() const;
+    virtual int Position(long long position);
+
+    virtual bool Seekable() const;
 
     bool Open(const char* filename);
     void Close();

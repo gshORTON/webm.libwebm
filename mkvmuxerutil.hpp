@@ -33,6 +33,11 @@ unsigned long long EbmlElementSize(unsigned long long type,
 unsigned long long EbmlElementSize(unsigned long long type,
                                    const char* value,
                                    bool master);
+
+int WriteUInt(IMkvWriter* pWriter, unsigned long long value);
+
+int WriteUIntSize(IMkvWriter* pWriter, unsigned long long value, int size);
+
 // Output an Mkv master element. Returns true if the element was written.
 bool WriteEbmlMasterElement(IMkvWriter* pWriter,
                             unsigned long long value,
@@ -48,6 +53,13 @@ bool WriteEbmlElement(IMkvWriter* pWriter,
 bool WriteEbmlElement(IMkvWriter* pWriter,
                       unsigned long long type,
                       const char* value);
+
+unsigned long long WriteSimpleBlock(IMkvWriter* pWriter,
+                      const unsigned char* data,
+                      unsigned long long length,
+                      char track_number,
+                      short timestamp,
+                      bool is_key);
 
 // Returns the version number of the muxer in |major|, |minor|, |build|,
 // and |revision|.

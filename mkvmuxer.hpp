@@ -18,6 +18,11 @@ class IMkvWriter {
   virtual int Write(const void* buf, unsigned long len) = 0;
   virtual long long Position() const = 0;
 
+  // Set the current File position. Returns 0 on success.
+  virtual int Position(long long position) = 0;
+  
+  virtual bool Seekable() const = 0;
+
  protected:
   IMkvWriter();
   virtual ~IMkvWriter();
@@ -151,7 +156,7 @@ private:
   // Initially set to -1 to signfy that a duration has not been set and should
   // not be written out.
   double duration_;
-  // Initially set to libwebm-%d.%d.%d.%d, major, minor, build, revision.
+  // Set to libwebm-%d.%d.%d.%d, major, minor, build, revision.
   char* muxing_app_;
   // Initially set to libwebm-%d.%d.%d.%d, major, minor, build, revision.
   char* writing_app_;
@@ -187,6 +192,34 @@ private:
     Tracks& operator=(const Tracks&);
 };
 
+class Cluster {
+public:
+    explicit Cluster(unsigned long long timecode);
+    ~Cluster();
+
+    void AddPayloadSize(unsigned long long size);
+
+     unsigned long long timecode() const {return timecode_;}
+
+     unsigned long long size_position() const {return size_position_;}
+     void size_position(unsigned long long pos) {size_position_ = pos;}
+
+     unsigned long long payload_size() const {return payload_size_;}
+
+private:
+    // The timecode of the cluster.
+    const unsigned long long timecode_;
+
+    // The file position of the size.
+    long long size_position_;
+
+    unsigned long long payload_size_;
+
+    // DISALLOW_COPY_AND_ASSIGN
+    Cluster(const Cluster&);
+    Cluster& operator=(const Cluster&);
+};
+
 // This class represents the main segment in a WebM file.
 class Segment {
 public:
@@ -198,10 +231,32 @@ public:
     kFile = 0x2
   };
 
-  bool AddVideoTrack(int width, int height);
-  bool AddAudioTrack(int sample_rate, int channels);
+  // Adds a video track to the segment. Returns the number of the track on
+  // success, 0 on error.
+  unsigned long long AddVideoTrack(int width, int height);
+
+  // Adds an audio track to the segment. Returns the number of the track on
+  // success, 0 on error.
+  unsigned long long AddAudioTrack(int sample_rate, int channels);
+
+  // Adds a frame to be output in the file. Returns true on success.
+  // Inputs:
+  //   frame: Pointer to the data
+  //   length: Length of the data
+  //   track_number: Track to add the data to. Value returned by Add track
+  //                 functions.
+  //   timestamp:    Timestamp of the frame in nanoseconds from 0.
+  //   is_key:       Flag telling whter or not this frame is a key frame.
+  bool AddFrame(unsigned char* frame,
+                unsigned long long length,
+                unsigned long long track_number,
+                unsigned long long timestamp,
+                bool is_key);
 
   bool WriteSegmentHeader();
+
+  // TODO: Change this!!!
+  bool Finalize();
 
   const SegmentInfo* segment_info() const {return &segment_info_;}
 
@@ -216,6 +271,12 @@ private:
   // The mode that segment is in. If set to |kLive| the writer must not
   // seek backwards.
   Mode mode_;
+
+  int cluster_list_size_;
+  int cluster_list_capacity_;
+  Cluster** cluster_list_;
+  bool new_cluster_;
+  unsigned long long last_timestamp_;
 
   // DISALLOW_COPY_AND_ASSIGN
   Segment(const Segment&);
