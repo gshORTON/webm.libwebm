@@ -502,17 +502,93 @@ bool Tracks::Write(IMkvWriter* writer) const {
   return true;
 }
 
-Cluster::Cluster(unsigned long long timecode)
+Cluster::Cluster(unsigned long long timecode, IMkvWriter* writer)
 : timecode_(timecode),
-  size_position_(-1),
-  payload_size_(0) {
+  writer_(writer),
+  finalized_(false),
+  header_written_(false),
+  payload_size_(0),
+  size_position_(-1) {
 }
 
 Cluster::~Cluster() {
 }
 
+bool Cluster::AddFrame(unsigned char* frame,
+                       unsigned long long length,
+                       unsigned long long track_number,
+                       short timecode,
+                       bool is_key) {
+  if (finalized_)
+    return false;
+
+  if (!header_written_)
+    if (!WriteClusterHeader())
+      return false;
+
+  const unsigned long long element_size =
+    WriteSimpleBlock(writer_,
+                     frame,
+                     length,
+                     static_cast<char>(track_number),
+                     timecode,
+                     is_key);
+  if (!element_size)
+    return false;
+
+  AddPayloadSize(element_size);
+
+  return true;
+}
+
 void Cluster::AddPayloadSize(unsigned long long size) {
   payload_size_ += size;
+}
+
+bool Cluster::Finalize() {
+  if (finalized_)
+    return false;
+
+  assert(size_position() != -1);
+
+  if (writer_->Seekable()) {
+    const long long pos = writer_->Position();
+
+    if (writer_->Position(size_position()))
+      return false;
+
+    if (WriteUIntSize(writer_, payload_size(), 8))
+      return false;
+
+    if (writer_->Position(pos))
+      return false;
+  }
+
+  finalized_ = true;
+
+  return true;
+}
+
+bool Cluster::WriteClusterHeader() {
+  assert(!finalized_);
+
+  if (SerializeInt(writer_, kMkvCluster, 4))
+    return false;
+
+  // Save for later.
+  size_position(writer_->Position());
+
+  // Write "unknown" (-1) as cluster size value. We need to write 8 bytes
+  // because we do not know how big our cluster will be.
+  if (SerializeInt(writer_, -1, 8))
+    return false;
+
+  if (!WriteEbmlElement(writer_, kMkvTimecode, timecode()))
+    return false;
+  AddPayloadSize(EbmlElementSize(kMkvTimecode, timecode(), false));
+  header_written_ = true;
+
+  return true;
 }
 
 Segment::Segment(IMkvWriter* writer)
@@ -535,20 +611,9 @@ bool Segment::Finalize() {
     // Update last cluster's size
     Cluster* old_cluster = cluster_list_[cluster_list_size_-1];
     assert(old_cluster);
-    assert(old_cluster->size_position() != -1);
 
-    if (writer_->Seekable()) {
-      const long long pos = writer_->Position();
-
-      if (writer_->Position(old_cluster->size_position()))
+    if (!old_cluster->Finalize())
         return false;
-
-      if (WriteUIntSize(writer_, old_cluster->payload_size(), 8))
-        return false;
-
-      if (writer_->Position(pos))
-        return false;
-    }
   }
 
   return true;
@@ -596,10 +661,14 @@ bool Segment::AddFrame(unsigned char* frame,
   if (is_key)
     new_cluster_ = true;
 
+  // TODO: Add support for time and/or size hueristic for creating new
+  // clusters.
+
   if (new_cluster_) {
     const int new_size = cluster_list_size_ + 1;
 
     if (new_size > cluster_list_capacity_) {
+      // Add more clusters.
       const int new_capacity =
         (!cluster_list_capacity_)? 2 : cluster_list_capacity_*2;
 
@@ -622,75 +691,38 @@ bool Segment::AddFrame(unsigned char* frame,
     
     // TODO: Add checks here to make sure the timestamps passed in are valid.
 
-    cluster_list_[cluster_list_size_] = new (std::nothrow) Cluster(timecode);
+    cluster_list_[cluster_list_size_] = new (std::nothrow) Cluster(timecode,
+                                                                   writer_);
     if (!cluster_list_[cluster_list_size_])
       return false;
     cluster_list_size_ = new_size;
 
-    // TODO: In file mode need to add code to bakcup and update old cluster
-    //       size.
     if (cluster_list_size_ > 1) {
       // Update old cluster's size
       Cluster* old_cluster = cluster_list_[cluster_list_size_-2];
       assert(old_cluster);
-      assert(old_cluster->size_position() != -1);
 
-      if (writer_->Seekable()) {
-        const long long pos = writer_->Position();
-
-        if (writer_->Position(old_cluster->size_position()))
-          return false;
-
-        if (WriteUIntSize(writer_, old_cluster->payload_size(), 8))
-          return false;
-
-        if (writer_->Position(pos))
-          return false;
-      }
+      if (!old_cluster->Finalize())
+        return false;
     }
-
-    if (SerializeInt(writer_, kMkvCluster, 4))
-      return false;
-
-    Cluster* cluster = cluster_list_[cluster_list_size_-1];
-    assert(cluster);
-
-    // Save for later.
-    cluster->size_position(writer_->Position());
-
-    // Write "unknown" (-1) as cluster size value. We need to write 8 bytes
-    // because we do not know how big our cluster will be.
-    if (SerializeInt(writer_, -1, 8))
-      return false;
-
-    if (!WriteEbmlElement(writer_, kMkvTimecode, cluster->timecode()))
-      return false;
-    cluster->AddPayloadSize(EbmlElementSize(kMkvTimecode,
-                                            cluster->timecode(),
-                                            false));
 
     new_cluster_ = false;
   }
 
   assert(cluster_list_size_ > 0);
-  Cluster* current_cluster = cluster_list_[cluster_list_size_-1];
-  assert(current_cluster);
+  Cluster* cluster = cluster_list_[cluster_list_size_-1];
+  assert(cluster);
 
   long long block_timecode = timestamp / segment_info_.timecode_scale();
-  block_timecode -= static_cast<long long>(current_cluster->timecode());
+  block_timecode -= static_cast<long long>(cluster->timecode());
   assert(block_timecode >= 0);
 
-  const unsigned long long element_size =
-    WriteSimpleBlock(writer_,
-                     frame,
-                     length,
-                     static_cast<char>(track_number),
-                     static_cast<short>(block_timecode),
-                     is_key);
-  if (!element_size)
+  if (!cluster->AddFrame(frame,
+                         length,
+                         track_number,
+                         static_cast<short>(block_timecode),
+                         is_key))
     return false;
-
-  current_cluster->AddPayloadSize(element_size);
 
   return true;
 }

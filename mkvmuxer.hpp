@@ -9,8 +9,7 @@
 #ifndef MKVMUXER_HPP
 #define MKVMUXER_HPP
 
-namespace mkvmuxer
-{
+namespace mkvmuxer {
 
 // Interface used by the mkvmuxer to write out the Mkv data.
 class IMkvWriter {
@@ -194,30 +193,61 @@ private:
 
 class Cluster {
 public:
-    explicit Cluster(unsigned long long timecode);
-    ~Cluster();
+  Cluster(unsigned long long timecode, IMkvWriter* writer);
+  ~Cluster();
 
-    void AddPayloadSize(unsigned long long size);
+  // Adds a frame to be output in the file. Returns true on success.
+  // Inputs:
+  //   frame: Pointer to the data
+  //   length: Length of the data
+  //   track_number: Track to add the data to. Value returned by Add track
+  //                 functions.
+  //   timestamp:    Timecode of the frame relative to the cluster timecode.
+  //   is_key:       Flag telling whter or not this frame is a key frame.
+  bool AddFrame(unsigned char* frame,
+                unsigned long long length,
+                unsigned long long track_number,
+                short timecode,
+                bool is_key);
 
-     unsigned long long timecode() const {return timecode_;}
+  // Increments the size of the cluster's data in bytes.
+  void AddPayloadSize(unsigned long long size);
 
-     unsigned long long size_position() const {return size_position_;}
-     void size_position(unsigned long long pos) {size_position_ = pos;}
+  // Closes the cluster so no more data can be written to it. Will update the
+  // cluster's size if |writer_| is seekable.
+  bool Finalize();
 
-     unsigned long long payload_size() const {return payload_size_;}
+  unsigned long long timecode() const {return timecode_;}
+
+  unsigned long long size_position() const {return size_position_;}
+  void size_position(unsigned long long pos) {size_position_ = pos;}
+
+  unsigned long long payload_size() const {return payload_size_;}
 
 private:
-    // The timecode of the cluster.
-    const unsigned long long timecode_;
+  // Outputs the Cluster header to |writer_|. Returns true on success.
+  bool WriteClusterHeader();
 
-    // The file position of the size.
-    long long size_position_;
+  // The timecode of the cluster.
+  const unsigned long long timecode_;
 
-    unsigned long long payload_size_;
+  IMkvWriter* writer_;
 
-    // DISALLOW_COPY_AND_ASSIGN
-    Cluster(const Cluster&);
-    Cluster& operator=(const Cluster&);
+  // Flag telling if the cluster has been closed.
+  bool finalized_;
+
+  // Flag telling if the cluster's header has been written.
+  bool header_written_;
+
+  // The size of the cluster elements in bytes.
+  unsigned long long payload_size_;
+
+  // The file position of the size.
+  long long size_position_;
+
+  // DISALLOW_COPY_AND_ASSIGN
+  Cluster(const Cluster&);
+  Cluster& operator=(const Cluster&);
 };
 
 // This class represents the main segment in a WebM file.
