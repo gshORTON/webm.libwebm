@@ -208,7 +208,7 @@ bool AudioTrack::Write(IMkvWriter* writer) const {
 
 Track::Track()
     : number_(0),
-      uid_(MakeTrackUID()),
+      uid_(MakeUID()),
       type_(0),
       codec_id_(NULL),
       codec_private_(NULL) {
@@ -311,6 +311,28 @@ void Track::codec_id(const char* codec_id) {
     strcpy(codec_id_, codec_id);
 #endif
   }
+}
+
+bool Track::is_seeded_ = false;
+
+unsigned long long Track::MakeUID() {
+  unsigned long long track_uid = 0;
+
+  if (!is_seeded_) {
+    srand(static_cast<unsigned int>(time(NULL)));
+    is_seeded_ = true;
+  }
+
+  for (int i = 0; i < 7; ++i) {  // avoid problems with 8-byte values
+    track_uid <<= 8;
+
+    const int nn = rand();
+    const int n = 0xFF & (nn >> 4);  // throw away low-order bits
+
+    track_uid |= n;
+  }
+
+  return track_uid;
 }
 
 SegmentInfo::SegmentInfo()
@@ -460,6 +482,16 @@ unsigned long Tracks::GetTracksCount() const {
   return m_trackEntriesSize;
 }
 
+const Track* Tracks::GetTrackByNumber(unsigned long long tn) const {
+  const int count = GetTracksCount();
+  for (int i=0; i<count; ++i) {
+    if (m_trackEntries[i]->number() == tn)
+      return m_trackEntries[i];
+  }
+
+  return NULL;
+}
+
 const Track* Tracks::GetTrackByIndex(unsigned long index) const {
   if (m_trackEntries == NULL)
     return NULL;
@@ -468,6 +500,15 @@ const Track* Tracks::GetTrackByIndex(unsigned long index) const {
     return NULL;
 
   return m_trackEntries[index];
+}
+
+bool Tracks::TrackIsVideo(unsigned long long track_number) {
+  const Track* track = GetTrackByNumber(track_number);
+
+  if (track->type() == kVideo)
+    return true;
+
+  return false;
 }
 
 bool Tracks::Write(IMkvWriter* writer) const {
@@ -596,6 +637,7 @@ Segment::Segment(IMkvWriter* writer)
   cluster_list_size_(0),
   cluster_list_capacity_(0),
   cluster_list_(NULL),
+  header_written_(false),
   new_cluster_(true) {
   assert(writer_);
 
@@ -658,7 +700,11 @@ bool Segment::AddFrame(unsigned char* frame,
   assert(length >= 0);
   assert(track_number >= 0);
 
-  if (is_key)
+  if (!header_written_)
+    if (!WriteSegmentHeader())
+      return false;
+
+  if (is_key && m_tracks_.TrackIsVideo(track_number))
     new_cluster_ = true;
 
   // TODO: Add support for time and/or size hueristic for creating new
@@ -740,6 +786,7 @@ bool Segment::WriteSegmentHeader() {
 
   if (!m_tracks_.Write(writer_))
     return false;
+  header_written_ = true;
 
   return true;
 }

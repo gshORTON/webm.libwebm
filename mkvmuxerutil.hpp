@@ -16,9 +16,6 @@ namespace mkvmuxer
 
 class IMkvWriter;
 
-// Returns a random number to be used for the Track UID.
-unsigned long long MakeTrackUID();
-
 // Creates an EBML encoded value from |value| and |size|. Returns 0 on success. 
 int SerializeInt(IMkvWriter* writer, long long value, int size);
 

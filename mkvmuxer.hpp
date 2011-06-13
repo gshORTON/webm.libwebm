@@ -63,6 +63,12 @@ public:
   const unsigned char* codec_private() const {return codec_private_;}
 
 private:
+  // Returns a random number to be used for the Track UID.
+  static unsigned long long MakeUID();
+
+  // Flag telling if the rand call was seeded.
+  static bool is_seeded_;
+
   unsigned long long number_;
   const unsigned long long uid_;
   unsigned long long type_;
@@ -167,28 +173,35 @@ private:
 
 class Tracks {
 public:
-    Tracks();
-    ~Tracks();
+  Tracks();
+  ~Tracks();
 
-    static const int kVideo = 0x1;
-    static const int kAudio = 0x2;
+  static const int kVideo = 0x1;
+  static const int kAudio = 0x2;
 
-    bool AddTrack(Track* track);
+  bool AddTrack(Track* track);
 
-    unsigned long GetTracksCount() const;
+  unsigned long GetTracksCount() const;
 
-    //const Track* GetTrackByNumber(unsigned long tn) const;
-    const Track* GetTrackByIndex(unsigned long idx) const;
+  // Search the Tracks and return thr track that matches |tn|. Returns NULL
+  // if there is no track match.
+  const Track* GetTrackByNumber(unsigned long long tn) const;
 
-    bool Write(IMkvWriter* writer) const;
+  // Returns the track by index. Returns NULL if there is no track match.
+  const Track* GetTrackByIndex(unsigned long idx) const;
+
+  // Returns true if the track number is a video track.
+  bool TrackIsVideo(unsigned long long track_number);
+
+  bool Write(IMkvWriter* writer) const;
 
 private:
-    unsigned int m_trackEntriesSize;
-    Track** m_trackEntries;
+  unsigned int m_trackEntriesSize;
+  Track** m_trackEntries;
 
-    // DISALLOW_COPY_AND_ASSIGN
-    Tracks(const Tracks&);
-    Tracks& operator=(const Tracks&);
+  // DISALLOW_COPY_AND_ASSIGN
+  Tracks(const Tracks&);
+  Tracks& operator=(const Tracks&);
 };
 
 class Cluster {
@@ -297,6 +310,9 @@ private:
   SegmentInfo segment_info_;
   Tracks m_tracks_;
   IMkvWriter* writer_;
+
+  // Flag telling if the segment's header has been written.
+  bool header_written_;
 
   // The mode that segment is in. If set to |kLive| the writer must not
   // seek backwards.

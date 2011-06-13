@@ -19,23 +19,6 @@
 
 namespace mkvmuxer {
 
-unsigned long long MakeTrackUID() {
-  unsigned long long track_uid = 0;
-
-  srand(static_cast<unsigned int>(time(NULL)));
-
-  for (int i = 0; i < 7; ++i) {  // avoid problems with 8-byte values
-    track_uid <<= 8;
-
-    const int nn = rand();
-    const int n = 0xFF & (nn >> 4);  // throw away low-order bits
-
-    track_uid |= n;
-  }
-
-  return track_uid;
-}
-
 int GetCodedUIntSize(unsigned long long value) {
 
   if (value < 0x000000000000007FULL)

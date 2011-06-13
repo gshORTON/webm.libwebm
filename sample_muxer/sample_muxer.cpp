@@ -38,15 +38,9 @@ int main(int argc, char* argv[])
     return -1;
   }
 
-  /*
-  if (!segment.AddAudioTrack(44100, 2)) {
+  const unsigned long long aud_track = segment.AddAudioTrack(44100, 2);
+  if (!aud_track) {
     printf("\n Could not add audio track.\n");
-    return -1;
-  }
-  */
-
-  if (!segment.WriteSegmentHeader()) {
-    printf("\n Could not write main Segment header.\n");
     return -1;
   }
 
@@ -54,11 +48,19 @@ int main(int argc, char* argv[])
   const unsigned int length = strlen("When roses are red, Bats are cool.") + 1;
   memcpy(video_frame, "When roses are red, Bats are cool.", length);
 
+  unsigned char audio_frame[36];
+  memcpy(audio_frame, "When roses are red, Bats are cool.", length);
+
   for (int i=0; i<300; ++i) {
     const unsigned long long timestamp = (i * 1000000000ULL) / 30ULL;
     const bool is_key = ((i+1) % 2) ? true : false;
 
     if (!segment.AddFrame(video_frame, length, vid_track, timestamp, is_key)) {
+      printf("\n Could not add video frame #%d.\n", i);
+      return -1;
+    }
+
+    if (!segment.AddFrame(audio_frame, length, aud_track, timestamp, true)) {
       printf("\n Could not add video frame #%d.\n", i);
       return -1;
     }
