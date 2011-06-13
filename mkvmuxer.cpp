@@ -131,9 +131,9 @@ bool VideoTrack::Write(IMkvWriter* writer) const {
 }
 
 AudioTrack::AudioTrack()
-    : sample_rate_(0.0),
-      channels_(1),
-      bit_depth_(0) {
+: bit_depth_(0),
+  channels_(1),
+  sample_rate_(0.0) {
 }
 
 AudioTrack::~AudioTrack() {
@@ -211,7 +211,8 @@ Track::Track()
       uid_(MakeUID()),
       type_(0),
       codec_id_(NULL),
-      codec_private_(NULL) {
+      codec_private_(NULL),
+      codec_private_length_(0) {
 }
 
 Track::~Track() {
@@ -239,8 +240,8 @@ unsigned long long Track::PayloadSize() const {
   size += EbmlElementSize(kMkvTrackType, type_, false);
   if (codec_id_)
     size += EbmlElementSize(kMkvCodecID, codec_id_, false);
-  //if (codec_private_)
-  //  size += EbmlElementSize(, codec_private_, false);
+  if (codec_private_)
+    size += EbmlElementSize(kMkvCodecPrivate, codec_private_, codec_private_length_, false);
 
   return size;
 }
@@ -260,6 +261,8 @@ bool Track::Write(IMkvWriter* writer) const {
   test += EbmlElementSize(kMkvTrackType, type_, false);
   if (codec_id_)
     test += EbmlElementSize(kMkvCodecID, codec_id_, false);
+  if (codec_private_)
+    test += EbmlElementSize(kMkvCodecPrivate, codec_private_, codec_private_length_, false);
 
   const long long payload_position = writer->Position();
   if (payload_position < 0)
@@ -275,6 +278,10 @@ bool Track::Write(IMkvWriter* writer) const {
     if (!WriteEbmlElement(writer, kMkvCodecID, codec_id_))
       return false;
   }
+  if (codec_private_) {
+    if (!WriteEbmlElement(writer, kMkvCodecPrivate, codec_private_, codec_private_length_))
+      return false;
+  }
 
   const long long stop_position = writer->Position();
   if (stop_position < 0)
@@ -284,16 +291,21 @@ bool Track::Write(IMkvWriter* writer) const {
   return true;
 }
 
-void Track::SetCodecPrivate(const unsigned char* codec_private, int length) {
+bool Track::SetCodecPrivate(const unsigned char* codec_private, unsigned long long length) {
   assert(codec_private);
   assert(length > 0);
 
-  if (codec_private_)
-    delete [] codec_private_;
+  delete [] codec_private_;
 
-  codec_private_ = new (std::nothrow) unsigned char[length];
-  if (codec_private_)
-    memcpy(codec_private_, codec_private, length);
+  codec_private_ =
+    new (std::nothrow) unsigned char[static_cast<unsigned long>(length)];
+  if (!codec_private_)
+    return false;
+
+  memcpy(codec_private_, codec_private, static_cast<size_t>(length));
+  codec_private_length_ = length;
+
+  return true;
 }
 
 void Track::codec_id(const char* codec_id) {
@@ -339,7 +351,8 @@ SegmentInfo::SegmentInfo()
     : timecode_scale_(1000000ULL),
       duration_(-1.0),
       muxing_app_(NULL),
-      writing_app_(NULL) {
+      writing_app_(NULL),
+      duration_pos_(-1) {
 }
 
 SegmentInfo::~SegmentInfo() {
@@ -388,7 +401,30 @@ bool SegmentInfo::Init() {
   return true;
 }
 
-bool SegmentInfo::Write(IMkvWriter* writer) const {
+bool SegmentInfo::Finalize(IMkvWriter* writer) const {
+  assert(writer);
+
+  if (duration_ > 0.0) {
+    if (writer->Seekable()) {
+      assert(duration_pos_ != -1);
+
+      const long long pos = writer->Position();
+
+      if (writer->Position(duration_pos_))
+        return false;
+
+      if (!WriteEbmlElement(writer, kMkvDuration, static_cast<float>(duration_)))
+        return false;
+
+      if (writer->Position(pos))
+        return false;
+    }
+  }
+
+  return true;
+}
+
+bool SegmentInfo::Write(IMkvWriter* writer) {
   assert(writer);
 
   if (!muxing_app_ || !writing_app_)
@@ -409,9 +445,15 @@ bool SegmentInfo::Write(IMkvWriter* writer) const {
 
   if (!WriteEbmlElement(writer, kMkvTimecodeScale, timecode_scale_))
     return false;
-  if (duration_ > 0.0)
+
+  if (duration_ > 0.0) {
+    // Save for later
+    duration_pos_ = writer->Position();
+
     if (!WriteEbmlElement(writer, kMkvDuration, static_cast<float>(duration_)))
       return false;
+  }
+
   if (!WriteEbmlElement(writer, kMkvMuxingApp, muxing_app_))
     return false;
   if (!WriteEbmlElement(writer, kMkvWritingApp, writing_app_))
@@ -482,7 +524,7 @@ unsigned long Tracks::GetTracksCount() const {
   return m_trackEntriesSize;
 }
 
-const Track* Tracks::GetTrackByNumber(unsigned long long tn) const {
+Track* Tracks::GetTrackByNumber(unsigned long long tn) {
   const int count = GetTracksCount();
   for (int i=0; i<count; ++i) {
     if (m_trackEntries[i]->number() == tn)
@@ -503,7 +545,7 @@ const Track* Tracks::GetTrackByIndex(unsigned long index) const {
 }
 
 bool Tracks::TrackIsVideo(unsigned long long track_number) {
-  const Track* track = GetTrackByNumber(track_number);
+  Track* track = GetTrackByNumber(track_number);
 
   if (track->type() == kVideo)
     return true;
@@ -590,12 +632,12 @@ bool Cluster::Finalize() {
   if (finalized_)
     return false;
 
-  assert(size_position() != -1);
+  assert(size_position_ != -1);
 
   if (writer_->Seekable()) {
     const long long pos = writer_->Position();
 
-    if (writer_->Position(size_position()))
+    if (writer_->Position(size_position_))
       return false;
 
     if (WriteUIntSize(writer_, payload_size(), 8))
@@ -617,7 +659,7 @@ bool Cluster::WriteClusterHeader() {
     return false;
 
   // Save for later.
-  size_position(writer_->Position());
+  size_position_ = writer_->Position();
 
   // Write "unknown" (-1) as cluster size value. We need to write 8 bytes
   // because we do not know how big our cluster will be.
@@ -638,7 +680,10 @@ Segment::Segment(IMkvWriter* writer)
   cluster_list_capacity_(0),
   cluster_list_(NULL),
   header_written_(false),
-  new_cluster_(true) {
+  new_cluster_(true),
+  size_position_(0),
+  mode_(kFile),
+  last_timestamp_(0) {
   assert(writer_);
 
   // TODO: Create an Init function for Segment.
@@ -649,13 +694,38 @@ Segment::~Segment() {
 }
 
 bool Segment::Finalize() {
-  if (cluster_list_size_ > 1) {
-    // Update last cluster's size
-    Cluster* old_cluster = cluster_list_[cluster_list_size_-1];
-    assert(old_cluster);
+  if (mode_ == kFile) {
+    if (cluster_list_size_ > 1) {
+      // Update last cluster's size
+      Cluster* old_cluster = cluster_list_[cluster_list_size_-1];
+      assert(old_cluster);
 
-    if (!old_cluster->Finalize())
+      if (!old_cluster->Finalize())
         return false;
+    }
+
+    const double duration =
+      static_cast<double>(last_timestamp_) / segment_info_.timecode_scale();
+    segment_info_.duration(duration);
+    if (!segment_info_.Finalize(writer_))
+      return false;
+
+    if (writer_->Seekable()) {
+      assert(size_position_ != -1);
+
+      const long long pos = writer_->Position();
+      const long long segment_size = pos - size_position_;
+      assert(segment_size > 0);
+
+      if (writer_->Position(size_position_))
+        return false;
+
+      if (WriteUIntSize(writer_, segment_size, 8))
+        return false;
+
+      if (writer_->Position(pos))
+        return false;
+    }
   }
 
   return true;
@@ -743,7 +813,7 @@ bool Segment::AddFrame(unsigned char* frame,
       return false;
     cluster_list_size_ = new_size;
 
-    if (cluster_list_size_ > 1) {
+    if (mode_ == kFile && cluster_list_size_ > 1) {
       // Update old cluster's size
       Cluster* old_cluster = cluster_list_[cluster_list_size_-2];
       assert(old_cluster);
@@ -763,6 +833,8 @@ bool Segment::AddFrame(unsigned char* frame,
   block_timecode -= static_cast<long long>(cluster->timecode());
   assert(block_timecode >= 0);
 
+  // TODO: Add support for the rule that the audio associated with the first
+  // video frame in a cluster must be in the same cluster.
   if (!cluster->AddFrame(frame,
                          length,
                          track_number,
@@ -770,7 +842,14 @@ bool Segment::AddFrame(unsigned char* frame,
                          is_key))
     return false;
 
+  if (timestamp > last_timestamp_)
+    last_timestamp_ = timestamp;
+
   return true;
+}
+
+Track* Segment::GetTrackByNumber(unsigned long long track_number) {
+  return m_tracks_.GetTrackByNumber(track_number);
 }
 
 bool Segment::WriteSegmentHeader() {
@@ -778,8 +857,21 @@ bool Segment::WriteSegmentHeader() {
   // will write over duration when the file is finalized.
   if (SerializeInt(writer_, kMkvSegment, 4))
     return false;
-  if (SerializeInt(writer_, -1, 1))
+
+  // Save for later.
+  size_position_ = writer_->Position();
+
+  // We need to write 8 bytes because if we are going ot overwrite the segment
+  // size later we do not know how big our segment will be.
+  if (SerializeInt(writer_, -1, 8))
     return false;
+
+  if (mode_ == kFile && writer_->Seekable()) {
+    // Set the duration so SegmentInfo will write out the duration. When the
+    // muxer is done writing we will set the correct duration and have
+    // SegmentInfo upadte it.
+    segment_info_.duration(1.0);
+  }
 
   if (!segment_info_.Write(writer_))
     return false;

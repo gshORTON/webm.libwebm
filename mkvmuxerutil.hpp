@@ -30,6 +30,10 @@ unsigned long long EbmlElementSize(unsigned long long type,
 unsigned long long EbmlElementSize(unsigned long long type,
                                    const char* value,
                                    bool master);
+unsigned long long EbmlElementSize(unsigned long long type,
+                                   const unsigned char* value,
+                                   unsigned long long size,
+                                   bool master);
 
 int WriteUInt(IMkvWriter* pWriter, unsigned long long value);
 
@@ -50,6 +54,10 @@ bool WriteEbmlElement(IMkvWriter* pWriter,
 bool WriteEbmlElement(IMkvWriter* pWriter,
                       unsigned long long type,
                       const char* value);
+bool WriteEbmlElement(IMkvWriter* pWriter,
+                      unsigned long long type,
+                      const unsigned char* value,
+                      unsigned long long size);
 
 unsigned long long WriteSimpleBlock(IMkvWriter* pWriter,
                       const unsigned char* data,

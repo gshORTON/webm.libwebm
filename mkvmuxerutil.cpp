@@ -77,7 +77,7 @@ unsigned long long EbmlElementSize(unsigned long long type,
                                    float value,
                                    bool master) {
   // Size of EBML ID
-  int ebml_size = GetUIntSize(type);
+  unsigned long long ebml_size = GetUIntSize(type);
 
   // Datasize
   ebml_size += 4;
@@ -95,7 +95,7 @@ unsigned long long EbmlElementSize(unsigned long long type,
   assert(value != NULL);
 
   // Size of EBML ID
-  int ebml_size = GetUIntSize(type);
+  unsigned long long ebml_size = GetUIntSize(type);
 
   // Datasize
   ebml_size += strlen(value);
@@ -103,6 +103,25 @@ unsigned long long EbmlElementSize(unsigned long long type,
   // Size of Datasize
   if (!master)
     ebml_size++;
+
+  return ebml_size;
+}
+
+unsigned long long EbmlElementSize(unsigned long long type,
+                                   const unsigned char* value,
+                                   unsigned long long size,
+                                   bool master) {
+  assert(value != NULL);
+
+  // Size of EBML ID
+  unsigned long long ebml_size = GetUIntSize(type);
+
+  // Datasize
+  ebml_size += size;
+
+  // Size of Datasize
+  if (!master)
+    ebml_size += GetCodedUIntSize(size);
 
   return ebml_size;
 }
@@ -269,6 +288,26 @@ bool WriteEbmlElement(IMkvWriter* pWriter,
     return false;
 
   if (pWriter->Write(value, length))
+    return false;
+
+  return true;
+}
+
+bool WriteEbmlElement(IMkvWriter* pWriter,
+                      unsigned long long type,
+                      const unsigned char* value,
+                      unsigned long long size) {
+  assert(pWriter);
+  assert(value != NULL);
+  assert(size > 0);
+
+  if (WriteID(pWriter, type))
+    return false;
+
+  if (WriteUInt(pWriter, size))
+    return false;
+
+  if (pWriter->Write(value, static_cast<unsigned long>(size)))
     return false;
 
   return true;

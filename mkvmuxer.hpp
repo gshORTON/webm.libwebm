@@ -46,7 +46,7 @@ public:
 
   virtual bool Write(IMkvWriter* writer) const;
 
-  void SetCodecPrivate(const unsigned char* codec_private, int length);
+  bool SetCodecPrivate(const unsigned char* codec_private, unsigned long long length);
 
   unsigned long long number() const {return number_;}
   void number(unsigned long long number) {number_ = number;}
@@ -61,7 +61,8 @@ public:
   void codec_id(const char* codec_id);
 
   const unsigned char* codec_private() const {return codec_private_;}
-
+  const unsigned long long codec_private_length() const {return codec_private_length_;}
+  
 private:
   // Returns a random number to be used for the Track UID.
   static unsigned long long MakeUID();
@@ -75,6 +76,7 @@ private:
 
   char* codec_id_;
   unsigned char* codec_private_;
+  unsigned long long codec_private_length_;
 
   // DISALLOW_COPY_AND_ASSIGN
   Track(const Track&);
@@ -115,19 +117,19 @@ public:
   virtual unsigned long long PayloadSize() const;
   virtual bool Write(IMkvWriter* writer) const;
 
-  double sample_rate() const {return sample_rate_;}
-  void sample_rate(double sample_rate) {sample_rate_ = sample_rate;}
+  unsigned long long bit_depth() const {return bit_depth_;}
+  void bit_depth(unsigned long long bit_depth) {bit_depth_ = bit_depth;}
 
   unsigned long long channels() const {return channels_;}
   void channels(unsigned long long channels) {channels_ = channels;}
 
-  unsigned long long bit_depth() const {return bit_depth_;}
-  void bit_depth(unsigned long long bit_depth) {bit_depth_ = bit_depth;}
+  double sample_rate() const {return sample_rate_;}
+  void sample_rate(double sample_rate) {sample_rate_ = sample_rate;}
 
 private:
-  double sample_rate_;
-  unsigned long long channels_;
   unsigned long long bit_depth_;
+  unsigned long long channels_;
+  double sample_rate_;
 
   // DISALLOW_COPY_AND_ASSIGN
   AudioTrack(const AudioTrack&);
@@ -142,7 +144,10 @@ public:
   // Sets |muxing_app_| and |writing_app_|.
   bool Init();
 
-  bool Write(IMkvWriter* writer) const;
+  // Will update the duration if |duration_| is > 0.0. Returns true on success.
+  bool Finalize(IMkvWriter* writer) const;
+
+  bool Write(IMkvWriter* writer);
 
   unsigned long long timecode_scale() const {return timecode_scale_;}
   void timecode_scale(unsigned long long scale) {timecode_scale_ = scale;}
@@ -166,6 +171,9 @@ private:
   // Initially set to libwebm-%d.%d.%d.%d, major, minor, build, revision.
   char* writing_app_;
 
+  // The file position of the duration.
+  unsigned long long duration_pos_;
+
   // DISALLOW_COPY_AND_ASSIGN
   SegmentInfo(const SegmentInfo&);
   SegmentInfo& operator=(const SegmentInfo&);
@@ -183,9 +191,9 @@ public:
 
   unsigned long GetTracksCount() const;
 
-  // Search the Tracks and return thr track that matches |tn|. Returns NULL
+  // Search the Tracks and return the track that matches |tn|. Returns NULL
   // if there is no track match.
-  const Track* GetTrackByNumber(unsigned long long tn) const;
+  Track* GetTrackByNumber(unsigned long long tn);
 
   // Returns the track by index. Returns NULL if there is no track match.
   const Track* GetTrackByIndex(unsigned long idx) const;
@@ -231,9 +239,6 @@ public:
   bool Finalize();
 
   unsigned long long timecode() const {return timecode_;}
-
-  unsigned long long size_position() const {return size_position_;}
-  void size_position(unsigned long long pos) {size_position_ = pos;}
 
   unsigned long long payload_size() const {return payload_size_;}
 
@@ -296,6 +301,12 @@ public:
                 unsigned long long timestamp,
                 bool is_key);
 
+  SegmentInfo* GetSegmentInfo() {return &segment_info_;}
+
+  // Search the Tracks and return the track that matches |track_number|.
+  // Returns NULL if there is no track match. 
+  Track* GetTrackByNumber(unsigned long long track_number);
+
   bool WriteSegmentHeader();
 
   // TODO: Change this!!!
@@ -317,6 +328,9 @@ private:
   // The mode that segment is in. If set to |kLive| the writer must not
   // seek backwards.
   Mode mode_;
+
+  // The file position of the size.
+  long long size_position_;
 
   int cluster_list_size_;
   int cluster_list_capacity_;
