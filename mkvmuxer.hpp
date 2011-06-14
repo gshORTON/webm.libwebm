@@ -421,6 +421,11 @@ public:
   Mode mode() const {return mode_;}
   void mode(Mode mode) {mode_ = mode;}
 
+  uint64 cluster_duration() const {return cluster_duration_;}
+  void cluster_duration(uint64 cluster_duration) {
+    cluster_duration_ = cluster_duration;
+  }
+
   bool output_cues() const {return output_cues_;}
   uint64 cues_track() const {return cues_track_;}
 
@@ -442,6 +447,11 @@ private:
 
   // The file position of the segment's payload.
   int64 payload_pos_;
+
+  // Maximum time in nanoseconds for a cluster duration. This variable is a
+  // guideline and some some clusters may have a longer duration. Defualt is
+  // 0 which signifies that the muxer will decide.
+  uint64 cluster_duration_;
 
   int cluster_list_size_;
   int cluster_list_capacity_;

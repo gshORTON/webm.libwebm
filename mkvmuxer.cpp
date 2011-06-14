@@ -950,6 +950,7 @@ Segment::Segment(IMkvWriter* writer)
   size_position_(0),
   payload_pos_(0),
   mode_(kFile),
+  cluster_duration_(0),
   last_timestamp_(0),
   output_cues_(true),
   cues_track_(0) {
@@ -1077,8 +1078,12 @@ bool Segment::AddFrame(uint8* frame,
     }
   }
 
-  if (is_key && m_tracks_.TrackIsVideo(track_number))
+  if (is_key && m_tracks_.TrackIsVideo(track_number)) {
     new_cluster_ = true;
+  } else if (cluster_duration_ > 0 &&
+             (timestamp - last_timestamp_) >= cluster_duration_) {
+    new_cluster_ = true;
+  }
 
   // TODO: Add support for time and/or size hueristic for creating new
   // clusters.
