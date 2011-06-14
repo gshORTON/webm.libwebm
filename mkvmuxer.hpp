@@ -136,49 +136,6 @@ private:
   AudioTrack& operator=(const AudioTrack&);
 };
 
-class SegmentInfo {
-public:
-  SegmentInfo();
-  ~SegmentInfo();
-
-  // Sets |muxing_app_| and |writing_app_|.
-  bool Init();
-
-  // Will update the duration if |duration_| is > 0.0. Returns true on success.
-  bool Finalize(IMkvWriter* writer) const;
-
-  bool Write(IMkvWriter* writer);
-
-  unsigned long long timecode_scale() const {return timecode_scale_;}
-  void timecode_scale(unsigned long long scale) {timecode_scale_ = scale;}
-  double duration() const {return duration_;}
-  void duration(double duration) {duration_ = duration;}
-
-  const char* muxing_app() const {return muxing_app_;}
-  const char* writing_app() const {return writing_app_;}
-  void writing_app(const char* app);
-
-private:
-  // For a description of the WebM elements see
-  // http://www.webmproject.org/code/specs/container/.
-
-  unsigned long long timecode_scale_;
-  // Initially set to -1 to signfy that a duration has not been set and should
-  // not be written out.
-  double duration_;
-  // Set to libwebm-%d.%d.%d.%d, major, minor, build, revision.
-  char* muxing_app_;
-  // Initially set to libwebm-%d.%d.%d.%d, major, minor, build, revision.
-  char* writing_app_;
-
-  // The file position of the duration.
-  unsigned long long duration_pos_;
-
-  // DISALLOW_COPY_AND_ASSIGN
-  SegmentInfo(const SegmentInfo&);
-  SegmentInfo& operator=(const SegmentInfo&);
-};
-
 class Tracks {
 public:
   Tracks();
@@ -235,7 +192,7 @@ public:
   void AddPayloadSize(unsigned long long size);
 
   // Closes the cluster so no more data can be written to it. Will update the
-  // cluster's size if |writer_| is seekable.
+  // cluster's size if |writer_| is seekable. Returns true on success.
   bool Finalize();
 
   unsigned long long timecode() const {return timecode_;}
@@ -268,6 +225,84 @@ private:
   Cluster& operator=(const Cluster&);
 };
 
+class SeekHead {
+public:
+  SeekHead();
+  ~SeekHead();
+
+  // Writes out SeekHead and SeekEntry elements. Returns true on success.
+  bool Finalize(IMkvWriter* writer) const;
+
+  // Reserves space by writing out a Void element which will be updated with
+  // a SeekHead element later. Returns true on success.
+  bool Write(IMkvWriter* writer);
+
+  // Adds a seek entry to be written out when the element is finalized. |id|
+  // must be the coded mkv element id. |pos| is the file position of the
+  // element. Returns true on success.
+  bool AddSeekEntry(unsigned long id, unsigned long long pos);
+
+private:
+  // Returns the maximum size in bytes of one seek entry.
+  unsigned long long MaxEntrySize() const;
+
+  // We are going to put a cap on the number of Seek Entries.
+  const static int kSeekEntryCount = 4;
+
+  unsigned long seek_entry_id_[kSeekEntryCount];
+  unsigned long long seek_entry_pos_[kSeekEntryCount];
+
+  // The file position of SeekHead.
+  long long start_pos_;
+
+  // DISALLOW_COPY_AND_ASSIGN
+  SeekHead(const SeekHead&);
+  SeekHead& operator=(const SeekHead&);
+};
+
+class SegmentInfo {
+public:
+  SegmentInfo();
+  ~SegmentInfo();
+
+  // Sets |muxing_app_| and |writing_app_|.
+  bool Init();
+
+  // Will update the duration if |duration_| is > 0.0. Returns true on success.
+  bool Finalize(IMkvWriter* writer) const;
+
+  bool Write(IMkvWriter* writer);
+
+  unsigned long long timecode_scale() const {return timecode_scale_;}
+  void timecode_scale(unsigned long long scale) {timecode_scale_ = scale;}
+  double duration() const {return duration_;}
+  void duration(double duration) {duration_ = duration;}
+
+  const char* muxing_app() const {return muxing_app_;}
+  const char* writing_app() const {return writing_app_;}
+  void writing_app(const char* app);
+
+private:
+  // For a description of the WebM elements see
+  // http://www.webmproject.org/code/specs/container/.
+
+  unsigned long long timecode_scale_;
+  // Initially set to -1 to signfy that a duration has not been set and should
+  // not be written out.
+  double duration_;
+  // Set to libwebm-%d.%d.%d.%d, major, minor, build, revision.
+  char* muxing_app_;
+  // Initially set to libwebm-%d.%d.%d.%d, major, minor, build, revision.
+  char* writing_app_;
+
+  // The file position of the duration.
+  unsigned long long duration_pos_;
+
+  // DISALLOW_COPY_AND_ASSIGN
+  SegmentInfo(const SegmentInfo&);
+  SegmentInfo& operator=(const SegmentInfo&);
+};
+
 // This class represents the main segment in a WebM file.
 class Segment {
 public:
@@ -294,7 +329,7 @@ public:
   //   track_number: Track to add the data to. Value returned by Add track
   //                 functions.
   //   timestamp:    Timestamp of the frame in nanoseconds from 0.
-  //   is_key:       Flag telling whter or not this frame is a key frame.
+  //   is_key:       Flag telling whether or not this frame is a key frame.
   bool AddFrame(unsigned char* frame,
                 unsigned long long length,
                 unsigned long long track_number,
@@ -319,6 +354,7 @@ public:
 
 private:
   SegmentInfo segment_info_;
+  SeekHead seek_head_;
   Tracks m_tracks_;
   IMkvWriter* writer_;
 
@@ -329,8 +365,11 @@ private:
   // seek backwards.
   Mode mode_;
 
-  // The file position of the size.
+  // The file position of the element's size.
   long long size_position_;
+
+  // The file position of the segment's payload.
+  long long payload_pos_;
 
   int cluster_list_size_;
   int cluster_list_capacity_;

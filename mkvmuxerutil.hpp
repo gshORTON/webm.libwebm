@@ -16,11 +16,12 @@ namespace mkvmuxer
 
 class IMkvWriter;
 
-// Creates an EBML encoded value from |value| and |size|. Returns 0 on success. 
+// Writes out |value| in Big Endian order. Returns 0 on success. 
 int SerializeInt(IMkvWriter* writer, long long value, int size);
 
 // Returns the size in bytes of the element. |master| must be set to true if
 // the element is an Mkv master element.
+// TODO: Change these functions so they are master element aware.
 unsigned long long EbmlElementSize(unsigned long long type,
                                    unsigned long long value,
                                    bool master);
@@ -35,8 +36,14 @@ unsigned long long EbmlElementSize(unsigned long long type,
                                    unsigned long long size,
                                    bool master);
 
+// Creates an EBML coded number from |value| and writes it out. The size of
+// the coded number is deteremined by the value of |value|. |value| must not
+// be in a coded form. Returns 0 on success.
 int WriteUInt(IMkvWriter* pWriter, unsigned long long value);
 
+// Creates an EBML coded number from |value| and writes it out. The size of
+// the coded number is deteremined by the value of |size|. |value| must not
+// be in a coded form. Returns 0 on success.
 int WriteUIntSize(IMkvWriter* pWriter, unsigned long long value, int size);
 
 // Output an Mkv master element. Returns true if the element was written.
@@ -66,9 +73,15 @@ unsigned long long WriteSimpleBlock(IMkvWriter* pWriter,
                       short timestamp,
                       bool is_key);
 
+unsigned long long WriteVoidElement(IMkvWriter* pWriter,
+                                    unsigned long long size);
+
 // Returns the version number of the muxer in |major|, |minor|, |build|,
 // and |revision|.
 void GetVersion(int& major, int& minor, int& build, int& revision);
+
+
+int WriteID(IMkvWriter* pWriter, unsigned long long type);
 
 }  //end namespace mkvmuxer
 

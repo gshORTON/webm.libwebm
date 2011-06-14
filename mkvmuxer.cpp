@@ -347,143 +347,6 @@ unsigned long long Track::MakeUID() {
   return track_uid;
 }
 
-SegmentInfo::SegmentInfo()
-    : timecode_scale_(1000000ULL),
-      duration_(-1.0),
-      muxing_app_(NULL),
-      writing_app_(NULL),
-      duration_pos_(-1) {
-}
-
-SegmentInfo::~SegmentInfo() {
-  if (muxing_app_) {
-    delete [] muxing_app_;
-    muxing_app_ = NULL;
-  }
-
-  if (writing_app_) {
-    delete [] writing_app_;
-    writing_app_ = NULL;
-  }
-}
-
-bool SegmentInfo::Init() {
-  int major;
-  int minor;
-  int build;
-  int revision;
-  GetVersion(major, minor, build, revision);
-  char temp[256];
-#ifdef WIN32
-  sprintf_s(temp, 64, "libwebm-%d.%d.%d.%d", major, minor, build, revision);
-#else
-  sprintf(temp, "libwebm-%d.%d.%d.%d", major, minor, build, revision);
-#endif
-
-  const int app_len = strlen(temp);
-
-  if (muxing_app_)
-    delete [] muxing_app_;
-
-  muxing_app_ = new (std::nothrow) char[app_len + 1];
-  if (!muxing_app_)
-    return false;
-
-#ifdef WIN32
-  strcpy_s(muxing_app_, app_len + 1, temp);
-#else
-  strcpy(muxing_app_, temp);
-#endif
-
-  writing_app(temp);
-  if (!writing_app_)
-    return false;
-  return true;
-}
-
-bool SegmentInfo::Finalize(IMkvWriter* writer) const {
-  assert(writer);
-
-  if (duration_ > 0.0) {
-    if (writer->Seekable()) {
-      assert(duration_pos_ != -1);
-
-      const long long pos = writer->Position();
-
-      if (writer->Position(duration_pos_))
-        return false;
-
-      if (!WriteEbmlElement(writer, kMkvDuration, static_cast<float>(duration_)))
-        return false;
-
-      if (writer->Position(pos))
-        return false;
-    }
-  }
-
-  return true;
-}
-
-bool SegmentInfo::Write(IMkvWriter* writer) {
-  assert(writer);
-
-  if (!muxing_app_ || !writing_app_)
-    return false;
-
-  unsigned long long size = EbmlElementSize(kMkvTimecodeScale, timecode_scale_, false);
-  if (duration_ > 0.0)
-    size += EbmlElementSize(kMkvDuration, static_cast<float>(duration_), false);
-  size += EbmlElementSize(kMkvMuxingApp, muxing_app_, false);
-  size += EbmlElementSize(kMkvWritingApp, writing_app_, false);
-
-  if (!WriteEbmlMasterElement(writer, kMkvInfo, size))
-    return false;
-
-  const long long payload_position = writer->Position();
-  if (payload_position < 0)
-    return false;
-
-  if (!WriteEbmlElement(writer, kMkvTimecodeScale, timecode_scale_))
-    return false;
-
-  if (duration_ > 0.0) {
-    // Save for later
-    duration_pos_ = writer->Position();
-
-    if (!WriteEbmlElement(writer, kMkvDuration, static_cast<float>(duration_)))
-      return false;
-  }
-
-  if (!WriteEbmlElement(writer, kMkvMuxingApp, muxing_app_))
-    return false;
-  if (!WriteEbmlElement(writer, kMkvWritingApp, writing_app_))
-    return false;
-
-  const long long stop_position = writer->Position();
-  if (stop_position < 0)
-    return false;
-  assert(stop_position - payload_position == size);
-
-  return true;
-}
-
-void SegmentInfo::writing_app(const char* app) {
-  assert(app);
-
-  if (writing_app_)
-    delete [] writing_app_;
-
-  int length = strlen(app) + 1;
-  writing_app_ = new (std::nothrow) char[length];
-  if (writing_app_) {
-#ifdef WIN32
-    strcpy_s(writing_app_, length, app);
-#else
-    strcpy(writing_app_, app);
-#endif
-  }
-}
-
 Tracks::Tracks()
     : m_trackEntries(NULL),
       m_trackEntriesSize(0) {
@@ -674,6 +537,250 @@ bool Cluster::WriteClusterHeader() {
   return true;
 }
 
+SeekHead::SeekHead()
+    : start_pos_(0ULL) {
+  for (int i=0; i<kSeekEntryCount; ++i) {
+    seek_entry_id_[i] = 0;
+    seek_entry_pos_[i] = 0;
+  }
+}
+
+SeekHead::~SeekHead() {
+}
+
+bool SeekHead::Finalize(IMkvWriter* writer) const {
+  if (writer->Seekable()) {
+    assert(start_pos_ != -1);
+
+    unsigned long long payload_size = 0;
+    unsigned long long entry_size[kSeekEntryCount];
+
+    for (int i=0; i<kSeekEntryCount; ++i) {
+      if (seek_entry_id_[i] != 0) {
+        entry_size[i] = EbmlElementSize(kMkvSeekID,
+          static_cast<unsigned long long>(seek_entry_id_[i]), false);
+        entry_size[i] += EbmlElementSize(kMkvSeekPosition,
+          seek_entry_pos_[i],
+          false);
+
+        payload_size += EbmlElementSize(kMkvSeek, entry_size[i], true) +
+                        entry_size[i];
+      }
+    }
+
+    // No SeekHead elements
+    if (payload_size == 0)
+      return true;
+
+    const long long pos = writer->Position();
+    if (writer->Position(start_pos_))
+      return false;
+
+    if (!WriteEbmlMasterElement(writer, kMkvSeekHead, payload_size))
+      return false;
+
+    for (int i=0; i<kSeekEntryCount; ++i) {
+      if (seek_entry_id_[i] != 0) {
+        if (!WriteEbmlMasterElement(writer, kMkvSeek, entry_size[i]))
+          return false;
+
+        if (!WriteEbmlElement(writer,
+          kMkvSeekID,
+          static_cast<unsigned long long>(seek_entry_id_[i])))
+          return false;
+
+        if (!WriteEbmlElement(writer, kMkvSeekPosition, seek_entry_pos_[i]))
+          return false;
+      }
+    }
+
+    const unsigned long long total_entry_size = kSeekEntryCount * MaxEntrySize();
+    const unsigned long long total_size = EbmlElementSize(kMkvSeekHead, total_entry_size, true) + total_entry_size;
+    const long long size_left = total_size - (writer->Position() - start_pos_);
+
+    const unsigned long long bytes_written = WriteVoidElement(writer, size_left);
+    if (!bytes_written)
+      return false;
+
+    if (writer->Position(pos))
+      return false;
+  }
+
+  return true;
+}
+
+bool SeekHead::Write(IMkvWriter* writer) {
+  const unsigned long long entry_size = kSeekEntryCount * MaxEntrySize();
+  const unsigned long long size = EbmlElementSize(kMkvSeekHead, entry_size, true);
+
+  start_pos_ = writer->Position();
+
+  const unsigned long long bytes_written = WriteVoidElement(writer, size + entry_size);
+  if (!bytes_written)
+    return false;
+
+  return true;
+}
+
+bool SeekHead::AddSeekEntry(unsigned long id, unsigned long long pos) {
+  for (int i=0; i<kSeekEntryCount; ++i) {
+    if (seek_entry_id_[i] == 0) {
+      seek_entry_id_[i] = id;
+      seek_entry_pos_[i] = pos;
+      return true;
+    }
+  }
+  return false;
+}
+
+unsigned long long SeekHead::MaxEntrySize() const {
+  const unsigned long long max_entry_payload_size =
+    EbmlElementSize(kMkvSeekID, 0xffffffffULL, false) +
+    EbmlElementSize(kMkvSeekPosition, 0xffffffffffffffffULL, false);
+  const unsigned long long max_entry_size =
+    EbmlElementSize(kMkvSeek, max_entry_payload_size, true) +
+    max_entry_payload_size;
+
+  return max_entry_size;
+}
+
+SegmentInfo::SegmentInfo()
+    : timecode_scale_(1000000ULL),
+      duration_(-1.0),
+      muxing_app_(NULL),
+      writing_app_(NULL),
+      duration_pos_(-1) {
+}
+
+SegmentInfo::~SegmentInfo() {
+  if (muxing_app_) {
+    delete [] muxing_app_;
+    muxing_app_ = NULL;
+  }
+
+  if (writing_app_) {
+    delete [] writing_app_;
+    writing_app_ = NULL;
+  }
+}
+
+bool SegmentInfo::Init() {
+  int major;
+  int minor;
+  int build;
+  int revision;
+  GetVersion(major, minor, build, revision);
+  char temp[256];
+#ifdef WIN32
+  sprintf_s(temp, 64, "libwebm-%d.%d.%d.%d", major, minor, build, revision);
+#else
+  sprintf(temp, "libwebm-%d.%d.%d.%d", major, minor, build, revision);
+#endif
+
+  const int app_len = strlen(temp);
+
+  if (muxing_app_)
+    delete [] muxing_app_;
+
+  muxing_app_ = new (std::nothrow) char[app_len + 1];
+  if (!muxing_app_)
+    return false;
+
+#ifdef WIN32
+  strcpy_s(muxing_app_, app_len + 1, temp);
+#else
+  strcpy(muxing_app_, temp);
+#endif
+
+  writing_app(temp);
+  if (!writing_app_)
+    return false;
+  return true;
+}
+
+bool SegmentInfo::Finalize(IMkvWriter* writer) const {
+  assert(writer);
+
+  if (duration_ > 0.0) {
+    if (writer->Seekable()) {
+      assert(duration_pos_ != -1);
+
+      const long long pos = writer->Position();
+
+      if (writer->Position(duration_pos_))
+        return false;
+
+      if (!WriteEbmlElement(writer, kMkvDuration, static_cast<float>(duration_)))
+        return false;
+
+      if (writer->Position(pos))
+        return false;
+    }
+  }
+
+  return true;
+}
+
+bool SegmentInfo::Write(IMkvWriter* writer) {
+  assert(writer);
+
+  if (!muxing_app_ || !writing_app_)
+    return false;
+
+  unsigned long long size = EbmlElementSize(kMkvTimecodeScale, timecode_scale_, false);
+  if (duration_ > 0.0)
+    size += EbmlElementSize(kMkvDuration, static_cast<float>(duration_), false);
+  size += EbmlElementSize(kMkvMuxingApp, muxing_app_, false);
+  size += EbmlElementSize(kMkvWritingApp, writing_app_, false);
+
+  if (!WriteEbmlMasterElement(writer, kMkvInfo, size))
+    return false;
+
+  const long long payload_position = writer->Position();
+  if (payload_position < 0)
+    return false;
+
+  if (!WriteEbmlElement(writer, kMkvTimecodeScale, timecode_scale_))
+    return false;
+
+  if (duration_ > 0.0) {
+    // Save for later
+    duration_pos_ = writer->Position();
+
+    if (!WriteEbmlElement(writer, kMkvDuration, static_cast<float>(duration_)))
+      return false;
+  }
+
+  if (!WriteEbmlElement(writer, kMkvMuxingApp, muxing_app_))
+    return false;
+  if (!WriteEbmlElement(writer, kMkvWritingApp, writing_app_))
+    return false;
+
+  const long long stop_position = writer->Position();
+  if (stop_position < 0)
+    return false;
+  assert(stop_position - payload_position == size);
+
+  return true;
+}
+
+void SegmentInfo::writing_app(const char* app) {
+  assert(app);
+
+  if (writing_app_)
+    delete [] writing_app_;
+
+  int length = strlen(app) + 1;
+  writing_app_ = new (std::nothrow) char[length];
+  if (writing_app_) {
+#ifdef WIN32
+    strcpy_s(writing_app_, length, app);
+#else
+    strcpy(writing_app_, app);
+#endif
+  }
+}
+
 Segment::Segment(IMkvWriter* writer)
 : writer_(writer),
   cluster_list_size_(0),
@@ -682,6 +789,7 @@ Segment::Segment(IMkvWriter* writer)
   header_written_(false),
   new_cluster_(true),
   size_position_(0),
+  payload_pos_(0),
   mode_(kFile),
   last_timestamp_(0) {
   assert(writer_);
@@ -708,6 +816,9 @@ bool Segment::Finalize() {
       static_cast<double>(last_timestamp_) / segment_info_.timecode_scale();
     segment_info_.duration(duration);
     if (!segment_info_.Finalize(writer_))
+      return false;
+
+    if (!seek_head_.Finalize(writer_))
       return false;
 
     if (writer_->Seekable()) {
@@ -770,9 +881,14 @@ bool Segment::AddFrame(unsigned char* frame,
   assert(length >= 0);
   assert(track_number >= 0);
 
-  if (!header_written_)
+  if (!header_written_) {
     if (!WriteSegmentHeader())
       return false;
+
+    if (!seek_head_.AddSeekEntry(kMkvCluster,
+                                 writer_->Position() - payload_pos_))
+      return false;
+  }
 
   if (is_key && m_tracks_.TrackIsVideo(track_number))
     new_cluster_ = true;
@@ -861,21 +977,30 @@ bool Segment::WriteSegmentHeader() {
   // Save for later.
   size_position_ = writer_->Position();
 
-  // We need to write 8 bytes because if we are going ot overwrite the segment
+  // We need to write 8 bytes because if we are going to overwrite the segment
   // size later we do not know how big our segment will be.
   if (SerializeInt(writer_, -1, 8))
     return false;
 
+  payload_pos_ =  writer_->Position();
+
   if (mode_ == kFile && writer_->Seekable()) {
-    // Set the duration so SegmentInfo will write out the duration. When the
-    // muxer is done writing we will set the correct duration and have
+    // Set the duration > 0.0 so SegmentInfo will write out the duration. When
+    // the muxer is done writing we will set the correct duration and have
     // SegmentInfo upadte it.
     segment_info_.duration(1.0);
   }
 
+  if (!seek_head_.Write(writer_))
+    return false;
+
+  if (!seek_head_.AddSeekEntry(kMkvInfo, writer_->Position() - payload_pos_))
+    return false;
   if (!segment_info_.Write(writer_))
     return false;
 
+  if (!seek_head_.AddSeekEntry(kMkvTracks, writer_->Position() - payload_pos_))
+    return false;
   if (!m_tracks_.Write(writer_))
     return false;
   header_written_ = true;

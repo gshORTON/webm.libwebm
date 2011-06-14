@@ -354,6 +354,37 @@ unsigned long long WriteSimpleBlock(IMkvWriter* pWriter,
   return element_size;
 }
 
+unsigned long long WriteVoidElement(IMkvWriter* pWriter,
+                                     unsigned long long size) {
+  // Subtract one for the void ID and the coded size.
+  unsigned long long void_entry_size = size - 1 - GetCodedUIntSize(size-1);
+  unsigned long long void_size = EbmlElementSize(kMkvVoid, void_entry_size, true) + void_entry_size;
+  assert(void_size == size);
+
+  const long long payload_position = pWriter->Position();
+  if (payload_position < 0)
+    return 0;
+
+  if (WriteID(pWriter, kMkvVoid))
+    return 0;
+
+  if (WriteUInt(pWriter, void_entry_size))
+    return 0;
+
+  unsigned char value = 0;
+  for (int i=0; i<void_entry_size; ++i) {
+    if (pWriter->Write(&value, 1))
+      return 0;
+  }
+
+  const long long stop_position = pWriter->Position();
+  if (stop_position < 0)
+    return 0;
+  assert(stop_position - payload_position == void_size);
+
+  return void_size;
+}
+
 void GetVersion(int& major, int& minor, int& build, int& revision)
 {
     major = 0;
