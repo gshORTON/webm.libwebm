@@ -56,6 +56,165 @@ bool WriteEbmlHeader(IMkvWriter* pWriter) {
   return true;
 }
 
+CuePoint::CuePoint()
+: time_(0),
+  track_(0),
+  cluster_pos_(0),
+  block_number_(1) {
+}
+
+CuePoint::~CuePoint() {
+}
+
+bool CuePoint::Write(IMkvWriter* writer) const {
+  assert(writer);
+  assert(track_ > 0);
+  assert(cluster_pos_ > 0);
+
+  uint64 size = EbmlElementSize(kMkvCueClusterPosition, cluster_pos_, false);
+  size += EbmlElementSize(kMkvCueTrack, track_, false);
+  if (block_number_ > 1)
+    size += EbmlElementSize(kMkvCueBlockNumber, block_number_, false);
+  uint64 track_pos_size = EbmlElementSize(kMkvCueTrackPositions, size, true) +
+                          size;
+  uint64 payload_size = EbmlElementSize(kMkvCueTime, time_, false) +
+                        track_pos_size;
+
+  if (!WriteEbmlMasterElement(writer, kMkvCuePoint, payload_size))
+    return false;
+
+  const int64 payload_position = writer->Position();
+  if (payload_position < 0)
+    return false;
+
+  if (!WriteEbmlElement(writer, kMkvCueTime, time_))
+    return false;
+
+  if (!WriteEbmlMasterElement(writer, kMkvCueTrackPositions, size))
+    return false;
+  if (!WriteEbmlElement(writer, kMkvCueTrack, track_))
+    return false;
+  if (!WriteEbmlElement(writer, kMkvCueClusterPosition, cluster_pos_))
+    return false;
+  if (block_number_ > 1)
+    if (!WriteEbmlElement(writer, kMkvCueBlockNumber, block_number_))
+      return false;
+
+  const int64 stop_position = writer->Position();
+  if (stop_position < 0)
+    return false;
+  assert(stop_position - payload_position == payload_size);
+
+  return true;
+}
+
+uint64 CuePoint::PayloadSize() const {
+  uint64 size = EbmlElementSize(kMkvCueClusterPosition, cluster_pos_, false);
+  size += EbmlElementSize(kMkvCueTrack, track_, false);
+  if (block_number_ > 1)
+    size += EbmlElementSize(kMkvCueBlockNumber, block_number_, false);
+  uint64 track_pos_size = EbmlElementSize(kMkvCueTrackPositions, size, true) +
+                          size;
+  uint64 payload_size = EbmlElementSize(kMkvCueTime, time_, false) +
+                        track_pos_size;
+
+  return payload_size;
+}
+
+uint64 CuePoint::Size() const {
+  const uint64 payload_size = PayloadSize();
+  uint64 element_size = EbmlElementSize(kMkvCuePoint, payload_size, true) +
+                        payload_size;
+
+  return element_size;
+}
+
+Cues::Cues()
+: cue_entries_capacity_(0),
+  cue_entries_size_(0),
+  cue_entries_(NULL) {
+}
+
+Cues::~Cues() {
+  if (cue_entries_) {
+    for (int i=0; i<cue_entries_size_; ++i) {
+      CuePoint* const cue = cue_entries_[i];
+      delete cue;
+    }
+    delete[] cue_entries_;
+  }
+}
+
+bool Cues::AddCue(CuePoint* cue) {
+  assert(cue);
+
+  if ((cue_entries_size_ + 1) > cue_entries_capacity_) {
+    // Add more CuePoints.
+    const int new_capacity =
+      (!cue_entries_capacity_)? 2 : cue_entries_capacity_*2;
+
+    assert(new_capacity > 0);
+    CuePoint** cues = new (std::nothrow) CuePoint*[new_capacity];
+    if (!cues)
+      return false;
+
+    for (int i=0; i<cue_entries_size_; ++i) {
+      cues[i] = cue_entries_[i];
+    }
+
+    delete [] cue_entries_;
+
+    cue_entries_ = cues;
+    cue_entries_capacity_ = new_capacity;
+  }
+
+  cue_entries_[cue_entries_size_++] = cue;
+  return true;
+}
+
+// Returns the track by index. Returns NULL if there is no track match.
+const CuePoint* Cues::GetCueByIndex(int index) const {
+  if (cue_entries_ == NULL)
+    return NULL;
+
+  if (index >= cue_entries_size_)
+    return NULL;
+
+  return cue_entries_[index];
+}
+
+bool Cues::Write(IMkvWriter* writer) const {
+  assert(writer);
+
+  uint64 size = 0;
+  for (int i=0; i<cue_entries_size_; ++i) {
+    const CuePoint* cue = GetCueByIndex(i);
+    assert(cue);
+    size += cue->Size();
+  }
+
+  if (!WriteEbmlMasterElement(writer, kMkvCues, size))
+    return false;
+
+  const int64 payload_position = writer->Position();
+  if (payload_position < 0)
+    return false;
+
+  for (int i=0; i<cue_entries_size_; ++i) {
+    const CuePoint* cue = GetCueByIndex(i);
+    assert(cue);
+    if (!cue->Write(writer))
+      return false;
+  }
+
+  const int64 stop_position = writer->Position();
+  if (stop_position < 0)
+    return false;
+  assert(stop_position - payload_position == size);
+
+  return true;
+}
+
 VideoTrack::VideoTrack()
     : width_(0),
       height_(0) {
@@ -376,7 +535,7 @@ bool Tracks::AddTrack(Track* track) {
   return true;
 }
 
-unsigned long Tracks::GetTracksCount() const {
+int Tracks::GetTracksCount() const {
   return m_trackEntriesSize;
 }
 
@@ -791,7 +950,9 @@ Segment::Segment(IMkvWriter* writer)
   size_position_(0),
   payload_pos_(0),
   mode_(kFile),
-  last_timestamp_(0) {
+  last_timestamp_(0),
+  output_cues_(true),
+  cues_track_(0) {
   assert(writer_);
 
   // TODO: Create an Init function for Segment.
@@ -816,6 +977,12 @@ bool Segment::Finalize() {
       static_cast<double>(last_timestamp_) / segment_info_.timecode_scale();
     segment_info_.duration(duration);
     if (!segment_info_.Finalize(writer_))
+      return false;
+
+    if (!seek_head_.AddSeekEntry(kMkvCues, writer_->Position() - payload_pos_))
+      return false;
+
+    if (!cues_.Write(writer_))
       return false;
 
     if (!seek_head_.Finalize(writer_))
@@ -888,6 +1055,26 @@ bool Segment::AddFrame(uint8* frame,
     if (!seek_head_.AddSeekEntry(kMkvCluster,
                                  writer_->Position() - payload_pos_))
       return false;
+
+    if (output_cues_ && cues_track_ == 0) {
+      // Check for a video track
+      for (int i=0; i<m_tracks_.GetTracksCount(); ++i) {
+        const Track* pTrack = m_tracks_.GetTrackByIndex(i);
+        assert(pTrack);
+
+        if (m_tracks_.TrackIsVideo(pTrack->number())) {
+          cues_track_ = pTrack->number();
+          break;
+        }
+      }
+
+      // Set first track found
+      if (cues_track_ == 0) {
+        const Track* pTrack = m_tracks_.GetTrackByIndex(0);
+        assert(pTrack);
+        cues_track_ = pTrack->number();
+      }
+    }
   }
 
   if (is_key && m_tracks_.TrackIsVideo(track_number))
@@ -929,13 +1116,25 @@ bool Segment::AddFrame(uint8* frame,
       return false;
     cluster_list_size_ = new_size;
 
-    if (mode_ == kFile && cluster_list_size_ > 1) {
-      // Update old cluster's size
-      Cluster* old_cluster = cluster_list_[cluster_list_size_-2];
-      assert(old_cluster);
+    if (mode_ == kFile) { 
+      if (cluster_list_size_ > 1) {
+        // Update old cluster's size
+        Cluster* old_cluster = cluster_list_[cluster_list_size_-2];
+        assert(old_cluster);
 
-      if (!old_cluster->Finalize())
-        return false;
+        if (!old_cluster->Finalize())
+          return false;
+      }
+
+      if (output_cues_) {
+        CuePoint* cue = new (std::nothrow) CuePoint();
+        assert(cue);
+        cue->time(timecode);
+        cue->cluster_pos(writer_->Position() - payload_pos_);
+        cue->track(cues_track_);
+        if (!cues_.AddCue(cue))
+          return false;
+      }
     }
 
     new_cluster_ = false;
@@ -961,6 +1160,19 @@ bool Segment::AddFrame(uint8* frame,
   if (timestamp > last_timestamp_)
     last_timestamp_ = timestamp;
 
+  return true;
+}
+
+void Segment::OutputCues(bool output_cues) {
+  output_cues_ = output_cues;
+}
+
+bool Segment::CuesTrack(uint64 track) {
+  Track* pTrack = GetTrackByNumber(track);
+  if (!pTrack)
+    return false;
+
+  cues_track_ = track;
   return true;
 }
 

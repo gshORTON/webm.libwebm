@@ -38,6 +38,65 @@ class IMkvWriter {
 // first before any other libwebm writing functions are called.
 bool WriteEbmlHeader(IMkvWriter* pWriter);
 
+class CuePoint {
+public:
+  CuePoint();
+  ~CuePoint();
+
+  // Returns the size in bytes for the entire CuePoint element.
+  uint64 Size() const;
+
+  bool Write(IMkvWriter* writer) const;
+
+  uint64 time() const {return time_;}
+  void time(uint64 time) {time_ = time;}
+  uint64 track() const {return track_;}
+  void track(uint64 track) {track_ = track;}
+  uint64 cluster_pos() const {return cluster_pos_;}
+  void cluster_pos(uint64 cluster_pos) {cluster_pos_ = cluster_pos;}
+  uint64 block_number() const {return block_number_;}
+  void block_number(uint64 block_number) {block_number_ = block_number;}
+
+private:
+  // Returns the size in bytes for the payload of the CuePoint element.
+  uint64 PayloadSize() const;
+
+  // Absolute timecode according to the segment time base.
+  uint64 time_;
+  uint64 track_;
+  uint64 cluster_pos_;
+  uint64 block_number_;
+
+  // DISALLOW_COPY_AND_ASSIGN
+  CuePoint(const CuePoint&);
+  CuePoint& operator=(const CuePoint&);
+};
+
+class Cues {
+public:
+  Cues();
+  ~Cues();
+
+  // Adds a cue point to the Cues element. Returns true on success.
+  bool AddCue(CuePoint* cue);
+
+  // Returns the track by index. Returns NULL if there is no track match.
+  const CuePoint* GetCueByIndex(int index) const;
+
+  bool Write(IMkvWriter* writer) const;
+
+  int cue_entries_size() const {return cue_entries_size_;}
+
+private:
+  int cue_entries_capacity_;
+  int cue_entries_size_;
+  CuePoint** cue_entries_;
+
+  // DISALLOW_COPY_AND_ASSIGN
+  Cues(const Cues&);
+  Cues& operator=(const Cues&);
+};
+
 class Track {
 public:
   Track();
@@ -148,7 +207,7 @@ public:
 
   bool AddTrack(Track* track);
 
-  unsigned long GetTracksCount() const;
+  int GetTracksCount() const;
 
   // Search the Tracks and return the track that matches |tn|. Returns NULL
   // if there is no track match.
@@ -338,6 +397,14 @@ public:
                 uint64 timestamp,
                 bool is_key);
 
+  // Toggles whether to output a cues element.
+  void OutputCues(bool output_cues);
+
+  // Sets which track to use for the Cues element. Must have added the track
+  // before calling this function. Returns true on success. |track| is
+  // returned by the Add track functions.
+  bool CuesTrack(uint64 track);
+
   SegmentInfo* GetSegmentInfo() {return &segment_info_;}
 
   // Search the Tracks and return the track that matches |track_number|.
@@ -353,6 +420,9 @@ public:
 
   Mode mode() const {return mode_;}
   void mode(Mode mode) {mode_ = mode;}
+
+  bool output_cues() const {return output_cues_;}
+  uint64 cues_track() const {return cues_track_;}
 
 private:
   SegmentInfo segment_info_;
@@ -378,6 +448,11 @@ private:
   Cluster** cluster_list_;
   bool new_cluster_;
   uint64 last_timestamp_;
+
+  // TODO: Should we add support for more than one Cues element?
+  bool output_cues_;
+  uint64 cues_track_;
+  Cues cues_;
 
   // DISALLOW_COPY_AND_ASSIGN
   Segment(const Segment&);
