@@ -9,79 +9,64 @@
 #ifndef MKVMUXERUTIL_HPP
 #define MKVMUXERUTIL_HPP
 
+#include "mkvmuxertypes.hpp"
+
 namespace mkvmuxer
 {
-//typedef long long          I64_t;
-//typedef unsigned long long U64_t;
 
 class IMkvWriter;
 
 // Writes out |value| in Big Endian order. Returns 0 on success. 
-int SerializeInt(IMkvWriter* writer, long long value, int size);
+int SerializeInt(IMkvWriter* writer, int64 value, int size);
 
 // Returns the size in bytes of the element. |master| must be set to true if
 // the element is an Mkv master element.
 // TODO: Change these functions so they are master element aware.
-unsigned long long EbmlElementSize(unsigned long long type,
-                                   unsigned long long value,
-                                   bool master);
-unsigned long long EbmlElementSize(unsigned long long type,
-                                   float value,
-                                   bool master);
-unsigned long long EbmlElementSize(unsigned long long type,
-                                   const char* value,
-                                   bool master);
-unsigned long long EbmlElementSize(unsigned long long type,
-                                   const unsigned char* value,
-                                   unsigned long long size,
-                                   bool master);
+uint64 EbmlElementSize(uint64 type, uint64 value, bool master);
+uint64 EbmlElementSize(uint64 type, float value, bool master);
+uint64 EbmlElementSize(uint64 type, const char* value, bool master);
+uint64 EbmlElementSize(uint64 type,
+                       const uint8* value,
+                       uint64 size,
+                       bool master);
 
 // Creates an EBML coded number from |value| and writes it out. The size of
 // the coded number is deteremined by the value of |value|. |value| must not
 // be in a coded form. Returns 0 on success.
-int WriteUInt(IMkvWriter* pWriter, unsigned long long value);
+int WriteUInt(IMkvWriter* pWriter, uint64 value);
 
 // Creates an EBML coded number from |value| and writes it out. The size of
 // the coded number is deteremined by the value of |size|. |value| must not
 // be in a coded form. Returns 0 on success.
-int WriteUIntSize(IMkvWriter* pWriter, unsigned long long value, int size);
+int WriteUIntSize(IMkvWriter* pWriter, uint64 value, int size);
 
 // Output an Mkv master element. Returns true if the element was written.
-bool WriteEbmlMasterElement(IMkvWriter* pWriter,
-                            unsigned long long value,
-                            unsigned long long size);
+bool WriteEbmlMasterElement(IMkvWriter* pWriter, uint64 value, uint64 size);
 
 // Output an Mkv non-master element. Returns true if the element was written.
+bool WriteEbmlElement(IMkvWriter* pWriter, uint64 type, uint64 value);
+bool WriteEbmlElement(IMkvWriter* pWriter, uint64 type, float value);
+bool WriteEbmlElement(IMkvWriter* pWriter, uint64 type, const char* value);
 bool WriteEbmlElement(IMkvWriter* pWriter,
-                      unsigned long long type,
-                      unsigned long long value);
-bool WriteEbmlElement(IMkvWriter* pWriter,
-                      unsigned long long type,
-                      float value);
-bool WriteEbmlElement(IMkvWriter* pWriter,
-                      unsigned long long type,
-                      const char* value);
-bool WriteEbmlElement(IMkvWriter* pWriter,
-                      unsigned long long type,
-                      const unsigned char* value,
-                      unsigned long long size);
+                      uint64 type,
+                      const uint8* value,
+                      uint64 size);
 
-unsigned long long WriteSimpleBlock(IMkvWriter* pWriter,
-                      const unsigned char* data,
-                      unsigned long long length,
-                      char track_number,
-                      short timestamp,
-                      bool is_key);
+uint64 WriteSimpleBlock(IMkvWriter* pWriter,
+                        const uint8* data,
+                        uint64 length,
+                        char track_number,
+                        short timestamp,
+                        bool is_key);
 
-unsigned long long WriteVoidElement(IMkvWriter* pWriter,
-                                    unsigned long long size);
+// Output a void element. |size| must be the entire size in bytes that will be
+// void. The function will calculate the size of the void header and subtract
+// it from |size|.
+uint64 WriteVoidElement(IMkvWriter* pWriter, uint64 size);
 
 // Returns the version number of the muxer in |major|, |minor|, |build|,
 // and |revision|.
 void GetVersion(int& major, int& minor, int& build, int& revision);
-
-
-int WriteID(IMkvWriter* pWriter, unsigned long long type);
 
 }  //end namespace mkvmuxer
 

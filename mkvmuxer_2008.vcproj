@@ -183,6 +183,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\mkvmuxertypes.hpp"
+				>
+			</File>
+			<File
 				RelativePath=".\mkvmuxerutil.hpp"
 				>
 			</File>

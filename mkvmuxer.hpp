@@ -9,16 +9,18 @@
 #ifndef MKVMUXER_HPP
 #define MKVMUXER_HPP
 
+#include "mkvmuxertypes.hpp"
+
 namespace mkvmuxer {
 
 // Interface used by the mkvmuxer to write out the Mkv data.
 class IMkvWriter {
  public:
   virtual int Write(const void* buf, unsigned long len) = 0;
-  virtual long long Position() const = 0;
+  virtual int64 Position() const = 0;
 
   // Set the current File position. Returns 0 on success.
-  virtual int Position(long long position) = 0;
+  virtual int Position(int64 position) = 0;
   
   virtual bool Seekable() const = 0;
 
@@ -41,42 +43,42 @@ public:
   Track();
   virtual ~Track();
 
-  virtual unsigned long long Size() const;
-  virtual unsigned long long PayloadSize() const;
+  virtual uint64 Size() const;
+  virtual uint64 PayloadSize() const;
 
   virtual bool Write(IMkvWriter* writer) const;
 
-  bool SetCodecPrivate(const unsigned char* codec_private, unsigned long long length);
+  bool SetCodecPrivate(const uint8* codec_private, uint64 length);
 
-  unsigned long long number() const {return number_;}
-  void number(unsigned long long number) {number_ = number;}
+  uint64 number() const {return number_;}
+  void number(uint64 number) {number_ = number;}
   
-  unsigned long long uid() const {return uid_;}
-  //void uid(unsigned long long uid) {uid_ = uid;}
+  uint64 uid() const {return uid_;}
+  //void uid(uint64 uid) {uid_ = uid;}
   
-  unsigned long long type() const {return type_;}
-  void type(unsigned long long type) {type_ = type;}
+  uint64 type() const {return type_;}
+  void type(uint64 type) {type_ = type;}
 
   const char* codec_id() const {return codec_id_;}
   void codec_id(const char* codec_id);
 
-  const unsigned char* codec_private() const {return codec_private_;}
-  const unsigned long long codec_private_length() const {return codec_private_length_;}
+  const uint8* codec_private() const {return codec_private_;}
+  const uint64 codec_private_length() const {return codec_private_length_;}
   
 private:
   // Returns a random number to be used for the Track UID.
-  static unsigned long long MakeUID();
+  static uint64 MakeUID();
 
   // Flag telling if the rand call was seeded.
   static bool is_seeded_;
 
-  unsigned long long number_;
-  const unsigned long long uid_;
-  unsigned long long type_;
+  uint64 number_;
+  const uint64 uid_;
+  uint64 type_;
 
   char* codec_id_;
-  unsigned char* codec_private_;
-  unsigned long long codec_private_length_;
+  uint8* codec_private_;
+  uint64 codec_private_length_;
 
   // DISALLOW_COPY_AND_ASSIGN
   Track(const Track&);
@@ -89,19 +91,19 @@ public:
   VideoTrack();
   virtual ~VideoTrack();
 
-  virtual unsigned long long Size() const;
-  virtual unsigned long long PayloadSize() const;
+  virtual uint64 Size() const;
+  virtual uint64 PayloadSize() const;
   virtual bool Write(IMkvWriter* writer) const;
 
-  unsigned long long width() const {return width_;}
-  void width(unsigned long long width) {width_ = width;}
+  uint64 width() const {return width_;}
+  void width(uint64 width) {width_ = width;}
 
-  unsigned long long height() const {return height_;}
-  void height(unsigned long long height) {height_ = height;}
+  uint64 height() const {return height_;}
+  void height(uint64 height) {height_ = height;}
 
 private:
-  unsigned long long width_;
-  unsigned long long height_;
+  uint64 width_;
+  uint64 height_;
 
   // DISALLOW_COPY_AND_ASSIGN
   VideoTrack(const VideoTrack&);
@@ -113,22 +115,22 @@ public:
   AudioTrack();
   virtual ~AudioTrack();
 
-  virtual unsigned long long Size() const;
-  virtual unsigned long long PayloadSize() const;
+  virtual uint64 Size() const;
+  virtual uint64 PayloadSize() const;
   virtual bool Write(IMkvWriter* writer) const;
 
-  unsigned long long bit_depth() const {return bit_depth_;}
-  void bit_depth(unsigned long long bit_depth) {bit_depth_ = bit_depth;}
+  uint64 bit_depth() const {return bit_depth_;}
+  void bit_depth(uint64 bit_depth) {bit_depth_ = bit_depth;}
 
-  unsigned long long channels() const {return channels_;}
-  void channels(unsigned long long channels) {channels_ = channels;}
+  uint64 channels() const {return channels_;}
+  void channels(uint64 channels) {channels_ = channels;}
 
   double sample_rate() const {return sample_rate_;}
   void sample_rate(double sample_rate) {sample_rate_ = sample_rate;}
 
 private:
-  unsigned long long bit_depth_;
-  unsigned long long channels_;
+  uint64 bit_depth_;
+  uint64 channels_;
   double sample_rate_;
 
   // DISALLOW_COPY_AND_ASSIGN
@@ -150,13 +152,13 @@ public:
 
   // Search the Tracks and return the track that matches |tn|. Returns NULL
   // if there is no track match.
-  Track* GetTrackByNumber(unsigned long long tn);
+  Track* GetTrackByNumber(uint64 tn);
 
   // Returns the track by index. Returns NULL if there is no track match.
   const Track* GetTrackByIndex(unsigned long idx) const;
 
   // Returns true if the track number is a video track.
-  bool TrackIsVideo(unsigned long long track_number);
+  bool TrackIsVideo(uint64 track_number);
 
   bool Write(IMkvWriter* writer) const;
 
@@ -171,7 +173,7 @@ private:
 
 class Cluster {
 public:
-  Cluster(unsigned long long timecode, IMkvWriter* writer);
+  Cluster(uint64 timecode, IMkvWriter* writer);
   ~Cluster();
 
   // Adds a frame to be output in the file. Returns true on success.
@@ -182,29 +184,29 @@ public:
   //                 functions.
   //   timestamp:    Timecode of the frame relative to the cluster timecode.
   //   is_key:       Flag telling whter or not this frame is a key frame.
-  bool AddFrame(unsigned char* frame,
-                unsigned long long length,
-                unsigned long long track_number,
+  bool AddFrame(uint8* frame,
+                uint64 length,
+                uint64 track_number,
                 short timecode,
                 bool is_key);
 
   // Increments the size of the cluster's data in bytes.
-  void AddPayloadSize(unsigned long long size);
+  void AddPayloadSize(uint64 size);
 
   // Closes the cluster so no more data can be written to it. Will update the
   // cluster's size if |writer_| is seekable. Returns true on success.
   bool Finalize();
 
-  unsigned long long timecode() const {return timecode_;}
+  uint64 timecode() const {return timecode_;}
 
-  unsigned long long payload_size() const {return payload_size_;}
+  uint64 payload_size() const {return payload_size_;}
 
 private:
   // Outputs the Cluster header to |writer_|. Returns true on success.
   bool WriteClusterHeader();
 
   // The timecode of the cluster.
-  const unsigned long long timecode_;
+  const uint64 timecode_;
 
   IMkvWriter* writer_;
 
@@ -215,10 +217,10 @@ private:
   bool header_written_;
 
   // The size of the cluster elements in bytes.
-  unsigned long long payload_size_;
+  uint64 payload_size_;
 
   // The file position of the size.
-  long long size_position_;
+  int64 size_position_;
 
   // DISALLOW_COPY_AND_ASSIGN
   Cluster(const Cluster&);
@@ -240,20 +242,20 @@ public:
   // Adds a seek entry to be written out when the element is finalized. |id|
   // must be the coded mkv element id. |pos| is the file position of the
   // element. Returns true on success.
-  bool AddSeekEntry(unsigned long id, unsigned long long pos);
+  bool AddSeekEntry(unsigned long id, uint64 pos);
 
 private:
   // Returns the maximum size in bytes of one seek entry.
-  unsigned long long MaxEntrySize() const;
+  uint64 MaxEntrySize() const;
 
   // We are going to put a cap on the number of Seek Entries.
   const static int kSeekEntryCount = 4;
 
   unsigned long seek_entry_id_[kSeekEntryCount];
-  unsigned long long seek_entry_pos_[kSeekEntryCount];
+  uint64 seek_entry_pos_[kSeekEntryCount];
 
   // The file position of SeekHead.
-  long long start_pos_;
+  int64 start_pos_;
 
   // DISALLOW_COPY_AND_ASSIGN
   SeekHead(const SeekHead&);
@@ -273,8 +275,8 @@ public:
 
   bool Write(IMkvWriter* writer);
 
-  unsigned long long timecode_scale() const {return timecode_scale_;}
-  void timecode_scale(unsigned long long scale) {timecode_scale_ = scale;}
+  uint64 timecode_scale() const {return timecode_scale_;}
+  void timecode_scale(uint64 scale) {timecode_scale_ = scale;}
   double duration() const {return duration_;}
   void duration(double duration) {duration_ = duration;}
 
@@ -286,7 +288,7 @@ private:
   // For a description of the WebM elements see
   // http://www.webmproject.org/code/specs/container/.
 
-  unsigned long long timecode_scale_;
+  uint64 timecode_scale_;
   // Initially set to -1 to signfy that a duration has not been set and should
   // not be written out.
   double duration_;
@@ -296,7 +298,7 @@ private:
   char* writing_app_;
 
   // The file position of the duration.
-  unsigned long long duration_pos_;
+  uint64 duration_pos_;
 
   // DISALLOW_COPY_AND_ASSIGN
   SegmentInfo(const SegmentInfo&);
@@ -316,11 +318,11 @@ public:
 
   // Adds a video track to the segment. Returns the number of the track on
   // success, 0 on error.
-  unsigned long long AddVideoTrack(int width, int height);
+  uint64 AddVideoTrack(int width, int height);
 
   // Adds an audio track to the segment. Returns the number of the track on
   // success, 0 on error.
-  unsigned long long AddAudioTrack(int sample_rate, int channels);
+  uint64 AddAudioTrack(int sample_rate, int channels);
 
   // Adds a frame to be output in the file. Returns true on success.
   // Inputs:
@@ -330,17 +332,17 @@ public:
   //                 functions.
   //   timestamp:    Timestamp of the frame in nanoseconds from 0.
   //   is_key:       Flag telling whether or not this frame is a key frame.
-  bool AddFrame(unsigned char* frame,
-                unsigned long long length,
-                unsigned long long track_number,
-                unsigned long long timestamp,
+  bool AddFrame(uint8* frame,
+                uint64 length,
+                uint64 track_number,
+                uint64 timestamp,
                 bool is_key);
 
   SegmentInfo* GetSegmentInfo() {return &segment_info_;}
 
   // Search the Tracks and return the track that matches |track_number|.
   // Returns NULL if there is no track match. 
-  Track* GetTrackByNumber(unsigned long long track_number);
+  Track* GetTrackByNumber(uint64 track_number);
 
   bool WriteSegmentHeader();
 
@@ -366,16 +368,16 @@ private:
   Mode mode_;
 
   // The file position of the element's size.
-  long long size_position_;
+  int64 size_position_;
 
   // The file position of the segment's payload.
-  long long payload_pos_;
+  int64 payload_pos_;
 
   int cluster_list_size_;
   int cluster_list_capacity_;
   Cluster** cluster_list_;
   bool new_cluster_;
-  unsigned long long last_timestamp_;
+  uint64 last_timestamp_;
 
   // DISALLOW_COPY_AND_ASSIGN
   Segment(const Segment&);
