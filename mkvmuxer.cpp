@@ -56,11 +56,37 @@ bool WriteEbmlHeader(IMkvWriter* pWriter) {
   return true;
 }
 
+Frame::Frame()
+: frame_(NULL),
+  length_(0),
+  track_number_(0),
+  timestamp_(0),
+  is_key_(false) {
+}
+
+Frame::~Frame() {
+  delete [] frame_;
+}
+
+bool Frame::Init(const uint8* frame, uint64 length) {
+  uint8* data = new (std::nothrow) uint8[static_cast<unsigned int>(length)];
+  if (!data)
+    return false;
+
+  delete [] frame_;
+  frame_ = data;
+  length_ = length;
+
+  memcpy(frame_, frame, static_cast<size_t>(length_));
+  return true;
+}
+
 CuePoint::CuePoint()
 : time_(0),
   track_(0),
   cluster_pos_(0),
-  block_number_(1) {
+  block_number_(1),
+  output_block_number_(true) {
 }
 
 CuePoint::~CuePoint() {
@@ -73,7 +99,7 @@ bool CuePoint::Write(IMkvWriter* writer) const {
 
   uint64 size = EbmlElementSize(kMkvCueClusterPosition, cluster_pos_, false);
   size += EbmlElementSize(kMkvCueTrack, track_, false);
-  if (block_number_ > 1)
+  if (output_block_number_ && block_number_ > 1)
     size += EbmlElementSize(kMkvCueBlockNumber, block_number_, false);
   uint64 track_pos_size = EbmlElementSize(kMkvCueTrackPositions, size, true) +
                           size;
@@ -96,7 +122,7 @@ bool CuePoint::Write(IMkvWriter* writer) const {
     return false;
   if (!WriteEbmlElement(writer, kMkvCueClusterPosition, cluster_pos_))
     return false;
-  if (block_number_ > 1)
+  if (output_block_number_ && block_number_ > 1)
     if (!WriteEbmlElement(writer, kMkvCueBlockNumber, block_number_))
       return false;
 
@@ -111,7 +137,7 @@ bool CuePoint::Write(IMkvWriter* writer) const {
 uint64 CuePoint::PayloadSize() const {
   uint64 size = EbmlElementSize(kMkvCueClusterPosition, cluster_pos_, false);
   size += EbmlElementSize(kMkvCueTrack, track_, false);
-  if (block_number_ > 1)
+  if (output_block_number_ && block_number_ > 1)
     size += EbmlElementSize(kMkvCueBlockNumber, block_number_, false);
   uint64 track_pos_size = EbmlElementSize(kMkvCueTrackPositions, size, true) +
                           size;
@@ -132,7 +158,8 @@ uint64 CuePoint::Size() const {
 Cues::Cues()
 : cue_entries_capacity_(0),
   cue_entries_size_(0),
-  cue_entries_(NULL) {
+  cue_entries_(NULL),
+  output_block_number_(true) {
 }
 
 Cues::~Cues() {
@@ -141,7 +168,7 @@ Cues::~Cues() {
       CuePoint* const cue = cue_entries_[i];
       delete cue;
     }
-    delete[] cue_entries_;
+    delete [] cue_entries_;
   }
 }
 
@@ -168,6 +195,7 @@ bool Cues::AddCue(CuePoint* cue) {
     cue_entries_capacity_ = new_capacity;
   }
 
+  cue->output_block_number(output_block_number_);
   cue_entries_[cue_entries_size_++] = cue;
   return true;
 }
@@ -510,7 +538,7 @@ Tracks::~Tracks() {
       Track* const pTrack = m_trackEntries[i];
       delete pTrack;
     }
-    delete[] m_trackEntries;
+    delete [] m_trackEntries;
   }
 }
 
@@ -558,6 +586,16 @@ const Track* Tracks::GetTrackByIndex(unsigned long index) const {
 
   return m_trackEntries[index];
 }
+
+bool Tracks::TrackIsAudio(uint64 track_number) {
+  Track* track = GetTrackByNumber(track_number);
+
+  if (track->type() == kAudio)
+    return true;
+
+  return false;
+}
+
 
 bool Tracks::TrackIsVideo(uint64 track_number) {
   Track* track = GetTrackByNumber(track_number);
@@ -612,7 +650,7 @@ Cluster::Cluster(uint64 timecode, IMkvWriter* writer)
 Cluster::~Cluster() {
 }
 
-bool Cluster::AddFrame(uint8* frame,
+bool Cluster::AddFrame(const uint8* frame,
                        uint64 length,
                        uint64 track_number,
                        short timecode,
@@ -945,25 +983,48 @@ Segment::Segment(IMkvWriter* writer)
   cluster_list_size_(0),
   cluster_list_capacity_(0),
   cluster_list_(NULL),
+  has_video_(false),
   header_written_(false),
   new_cluster_(true),
   size_position_(0),
   payload_pos_(0),
   mode_(kFile),
-  cluster_duration_(0),
+  max_cluster_duration_(0),
+  max_cluster_size_(0),
   last_timestamp_(0),
   output_cues_(true),
-  cues_track_(0) {
+  cues_track_(0),
+  frames_size_(0),
+  frames_capacity_(0),
+  frames_(NULL) {
   assert(writer_);
 
   // TODO: Create an Init function for Segment.
   segment_info_.Init();
 }
 
-Segment::~Segment() { 
+Segment::~Segment() {
+  if (cluster_list_) {
+    for (int i=0; i<cluster_list_size_; ++i) {
+      Cluster* const cluster = cluster_list_[i];
+      delete cluster;
+    }
+    delete [] cluster_list_;
+  }
+
+  if (frames_) {
+    for (int i=0; i<frames_size_; ++i) {
+      Frame* const frame = frames_[i];
+      delete frame;
+    }
+    delete [] frames_;
+  }
 }
 
 bool Segment::Finalize() {
+  if (!WriteFramesAll())
+   return false;
+
   if (mode_ == kFile) {
     if (cluster_list_size_ > 1) {
       // Update last cluster's size
@@ -980,6 +1041,7 @@ bool Segment::Finalize() {
     if (!segment_info_.Finalize(writer_))
       return false;
 
+    // TODO: Add support for putting the Cues at the front.
     if (!seek_head_.AddSeekEntry(kMkvCues, writer_->Position() - payload_pos_))
       return false;
 
@@ -1021,6 +1083,7 @@ uint64 Segment::AddVideoTrack(int width, int height) {
   vid_track->height(height);
 
   m_tracks_.AddTrack(vid_track);
+  has_video_ = true;
 
   return vid_track->number();
 }
@@ -1078,15 +1141,36 @@ bool Segment::AddFrame(uint8* frame,
     }
   }
 
-  if (is_key && m_tracks_.TrackIsVideo(track_number)) {
-    new_cluster_ = true;
-  } else if (cluster_duration_ > 0 &&
-             (timestamp - last_timestamp_) >= cluster_duration_) {
-    new_cluster_ = true;
+  // If the segment has a video track hold onto audio frames to make sure the
+  // audio that is associated with the start time of a video key-frame is
+  // muxed into the same cluster.
+  if (has_video_ && m_tracks_.TrackIsAudio(track_number)) {
+    Frame* new_frame = new Frame();
+    if (!new_frame->Init(frame, length))
+      return false;
+    new_frame->track_number(track_number);
+    new_frame->timestamp(timestamp);
+    new_frame->is_key(is_key);
+
+    if (!QueueFrame(new_frame))
+      return false;
+
+    return true;
   }
 
-  // TODO: Add support for time and/or size hueristic for creating new
-  // clusters.
+  // Check to see if the muxer needs to start a new cluster.
+  if (is_key && m_tracks_.TrackIsVideo(track_number)) {
+    new_cluster_ = true;
+  } else if (max_cluster_duration_ > 0 &&
+             (timestamp - last_timestamp_) >= max_cluster_duration_) {
+    new_cluster_ = true;
+  } else if (max_cluster_size_ > 0 && cluster_list_size_ > 0) {
+    Cluster* cluster = cluster_list_[cluster_list_size_-1];
+    assert(cluster);
+    if (cluster->payload_size() >= max_cluster_size_) {
+      new_cluster_ = true;
+    }
+  } 
 
   if (new_cluster_) {
     const int new_size = cluster_list_size_ + 1;
@@ -1111,7 +1195,18 @@ bool Segment::AddFrame(uint8* frame,
       cluster_list_capacity_ = new_capacity;
     }
 
-    const uint64 timecode = timestamp / segment_info_.timecode_scale();
+    if (!WriteFramesLessThan(timestamp))
+      return false;
+
+    uint64 timecode = timestamp / segment_info_.timecode_scale();
+    if (frames_size_ > 0) {
+      uint64 audio_timecode =
+        frames_[0]->timestamp() / segment_info_.timecode_scale();
+
+      // Update the cluster's timecode to match the first audio frame.
+      if (audio_timecode < timecode)
+        timecode = audio_timecode;
+    }
     
     // TODO: Add checks here to make sure the timestamps passed in are valid.
 
@@ -1134,7 +1229,17 @@ bool Segment::AddFrame(uint8* frame,
       if (output_cues_) {
         CuePoint* cue = new (std::nothrow) CuePoint();
         assert(cue);
-        cue->time(timecode);
+
+        // The timestamp should be for the frame that triggered a new cluster.
+        // I.E. In a muxed audio and video file the cue time should point to
+        // the video frame.
+        cue->time(timestamp / segment_info_.timecode_scale());
+
+        if (frames_size_ > 0) {
+          // The audio frames queued will be written before the first video
+          // frame.
+          cue->block_number(frames_size_ + 1);
+        }
         cue->cluster_pos(writer_->Position() - payload_pos_);
         cue->track(cues_track_);
         if (!cues_.AddCue(cue))
@@ -1145,6 +1250,10 @@ bool Segment::AddFrame(uint8* frame,
     new_cluster_ = false;
   }
 
+  // Write any audio frames left.
+  if (!WriteFramesAll())
+   return false;
+
   assert(cluster_list_size_ > 0);
   Cluster* cluster = cluster_list_[cluster_list_size_-1];
   assert(cluster);
@@ -1153,8 +1262,6 @@ bool Segment::AddFrame(uint8* frame,
   block_timecode -= static_cast<int64>(cluster->timecode());
   assert(block_timecode >= 0);
 
-  // TODO: Add support for the rule that the audio associated with the first
-  // video frame in a cluster must be in the same cluster.
   if (!cluster->AddFrame(frame,
                          length,
                          track_number,
@@ -1221,6 +1328,117 @@ bool Segment::WriteSegmentHeader() {
   if (!m_tracks_.Write(writer_))
     return false;
   header_written_ = true;
+
+  return true;
+}
+
+
+bool Segment::QueueFrame(Frame* frame) {
+  const int new_size = frames_size_ + 1;
+
+  if (new_size > frames_capacity_) {
+    // Add more frames.
+    const int new_capacity = (!frames_capacity_)? 2 : frames_capacity_*2;
+    assert(new_capacity > 0);
+
+    Frame** frames = new (std::nothrow) Frame*[new_capacity];
+    if (!frames)
+      return false;
+
+    for (int i=0; i<frames_size_; ++i) {
+      frames[i] = frames_[i];
+    }
+
+    delete [] frames_;
+    frames_ = frames;
+    frames_capacity_ = new_capacity;
+  }
+
+  frames_[frames_size_++] = frame;
+
+  return true;
+}
+
+bool Segment::WriteFramesAll() {
+  if (frames_) {
+    assert(cluster_list_size_ > 0);
+    Cluster* cluster = cluster_list_[cluster_list_size_-1];
+    assert(cluster);
+
+    for (int i=0; i<frames_size_; ++i) {
+      Frame* const frame = frames_[i];
+
+      int64 block_timecode = frame->timestamp() / segment_info_.timecode_scale();
+      block_timecode -= static_cast<int64>(cluster->timecode());
+      assert(block_timecode >= 0);
+
+      if (!cluster->AddFrame(frame->frame(),
+                             frame->length(),
+                             frame->track_number(),
+                             static_cast<short>(block_timecode),
+                             frame->is_key()))
+        return false;
+
+      if (frame->timestamp() > last_timestamp_)
+        last_timestamp_ = frame->timestamp();
+
+      delete frame;
+    }
+
+    frames_size_ = 0;
+  }
+
+  return true;
+}
+
+bool Segment::WriteFramesLessThan(uint64 timestamp) {
+  if (frames_size_ > 0) {
+    assert(frames_);
+    assert(cluster_list_size_ > 0);
+    Cluster* cluster = cluster_list_[cluster_list_size_-1];
+    assert(cluster);
+
+    int shift_left = 0;
+
+    // TODO: Change this to use the durations of frames instead of the next
+    // frame's start time if the duration is accurate.
+    for (int i=1; i<frames_size_; ++i) {
+      const Frame* const frame_curr = frames_[i];
+
+      if (frame_curr->timestamp() > timestamp)
+        break;
+
+      const Frame* const frame_prev = frames_[i-1];
+      
+      int64 block_timecode = frame_prev->timestamp() / segment_info_.timecode_scale();
+      block_timecode -= static_cast<int64>(cluster->timecode());
+      assert(block_timecode >= 0);
+
+      if (!cluster->AddFrame(frame_prev->frame(),
+                             frame_prev->length(),
+                             frame_prev->track_number(),
+                             static_cast<short>(block_timecode),
+                             frame_prev->is_key()))
+        return false;
+
+      ++shift_left;
+      if (frame_prev->timestamp() > last_timestamp_)
+        last_timestamp_ = frame_prev->timestamp();
+
+      delete frame_prev;
+    }
+
+    if (shift_left > 0) {
+      assert(shift_left < frames_size_);
+
+      const int new_frames_size = frames_size_ - shift_left;
+      for (int i=0; i<new_frames_size; ++i) {
+        frames_[i] = frames_[i+shift_left];
+      }
+
+      frames_size_ = new_frames_size;
+    }
+  }
 
   return true;
 }

@@ -38,6 +38,32 @@ class IMkvWriter {
 // first before any other libwebm writing functions are called.
 bool WriteEbmlHeader(IMkvWriter* pWriter);
 
+
+class Frame {
+public:
+  Frame();
+  ~Frame();
+
+  // Copies |frame| data into |frame_|. Returns true on success.
+  bool Init(const uint8* frame, uint64 length);
+
+  const uint8* frame() const {return frame_;}
+  uint64 length() const {return length_;}
+  uint64 track_number() const {return track_number_;}
+  void track_number(uint64 track_number) {track_number_ = track_number;}
+  uint64 timestamp() const {return timestamp_;}
+  void timestamp(uint64 timestamp) {timestamp_ = timestamp;}
+  bool is_key() const {return is_key_;}
+  void is_key(bool key) {is_key_ = key;}
+
+private:
+  uint8* frame_;
+  uint64 length_;
+  uint64 track_number_;
+  uint64 timestamp_;
+  bool is_key_;
+};
+
 class CuePoint {
 public:
   CuePoint();
@@ -57,6 +83,11 @@ public:
   uint64 block_number() const {return block_number_;}
   void block_number(uint64 block_number) {block_number_ = block_number;}
 
+  bool output_block_number() const {return output_block_number_;}
+  void output_block_number(bool output_block_number) {
+    output_block_number_ = output_block_number;
+  }
+
 private:
   // Returns the size in bytes for the payload of the CuePoint element.
   uint64 PayloadSize() const;
@@ -66,6 +97,11 @@ private:
   uint64 track_;
   uint64 cluster_pos_;
   uint64 block_number_;
+
+  // If true the muxer will write out the block number for the cue if the
+  // block number is different than the defualt of 1. Default is set to true. 
+  bool output_block_number_;
+
 
   // DISALLOW_COPY_AND_ASSIGN
   CuePoint(const CuePoint&);
@@ -86,11 +122,19 @@ public:
   bool Write(IMkvWriter* writer) const;
 
   int cue_entries_size() const {return cue_entries_size_;}
+  bool output_block_number() const {return output_block_number_;}
+  void output_block_number(bool output_block_number) {
+    output_block_number_ = output_block_number;
+  }
 
 private:
   int cue_entries_capacity_;
   int cue_entries_size_;
   CuePoint** cue_entries_;
+
+  // If true the muxer will write out the block number for the cue if the
+  // block number is different than the defualt of 1. Default is set to true. 
+  bool output_block_number_;
 
   // DISALLOW_COPY_AND_ASSIGN
   Cues(const Cues&);
@@ -216,6 +260,9 @@ public:
   // Returns the track by index. Returns NULL if there is no track match.
   const Track* GetTrackByIndex(unsigned long idx) const;
 
+  // Returns true if the track number is an audio track.
+  bool TrackIsAudio(uint64 track_number);
+
   // Returns true if the track number is a video track.
   bool TrackIsVideo(uint64 track_number);
 
@@ -243,7 +290,7 @@ public:
   //                 functions.
   //   timestamp:    Timecode of the frame relative to the cluster timecode.
   //   is_key:       Flag telling whter or not this frame is a key frame.
-  bool AddFrame(uint8* frame,
+  bool AddFrame(const uint8* frame,
                 uint64 length,
                 uint64 track_number,
                 short timecode,
@@ -405,6 +452,7 @@ public:
   // returned by the Add track functions.
   bool CuesTrack(uint64 track);
 
+  Cues* GetCues() {return &cues_;}
   SegmentInfo* GetSegmentInfo() {return &segment_info_;}
 
   // Search the Tracks and return the track that matches |track_number|.
@@ -421,48 +469,91 @@ public:
   Mode mode() const {return mode_;}
   void mode(Mode mode) {mode_ = mode;}
 
-  uint64 cluster_duration() const {return cluster_duration_;}
-  void cluster_duration(uint64 cluster_duration) {
-    cluster_duration_ = cluster_duration;
+  uint64 max_cluster_duration() const {return max_cluster_duration_;}
+  void max_cluster_duration(uint64 max_cluster_duration) {
+    max_cluster_duration_ = max_cluster_duration;
+  }
+  uint64 max_cluster_size() const {return max_cluster_size_;}
+  void max_cluster_size(uint64 max_cluster_size) {
+    max_cluster_size_ = max_cluster_size;
   }
 
   bool output_cues() const {return output_cues_;}
   uint64 cues_track() const {return cues_track_;}
 
 private:
+  // Adds the frame to our frame array.
+  bool QueueFrame(Frame* frame);
+
+  // Output all frames that are queued. Returns true on success and if there
+  // are no frames queued.
+  bool WriteFramesAll();
+
+  // Output all frames that are queued that have an end time that is less
+  // then |timestamp|. Returns true on success and if there are no frames
+  // queued.
+  bool WriteFramesLessThan(uint64 timestamp);
+
+  // WebM elements
+  Cues cues_;
   SegmentInfo segment_info_;
   SeekHead seek_head_;
   Tracks m_tracks_;
-  IMkvWriter* writer_;
+
+  // List of clusters.
+  Cluster** cluster_list_;
+  int cluster_list_size_;
+  int cluster_list_capacity_;
+
+  // Track number that is associated with the cues element for this segment.
+  uint64 cues_track_;
+
+  // List of stored audio frames. These varibles are used to store frames so
+  // the muxer can follow the guideline "Audio blocks that contain the video
+  // key frame's timecode should be in the same cluster as the video key frame
+  // block."
+  Frame** frames_;
+  int frames_size_;
+  int frames_capacity_;
+
+  // Flag telling if a video track has been added to the segment.
+  bool has_video_;
 
   // Flag telling if the segment's header has been written.
   bool header_written_;
+
+  // Last timestamp in nanoseconds added to a cluster.
+  uint64 last_timestamp_;
+
+  // Maximum time in nanoseconds for a cluster duration. This variable is a
+  // guideline and some clusters may have a longer duration. Defualt is 0
+  // which signifies that the muxer will decide.
+  uint64 max_cluster_duration_;
+
+  // Maximum size in bytes for a cluster. This variable is a guideline and
+  // some clusters may have a larger size. Defualt is 0 which signifies that
+  // the muxer will decide the size.
+  uint64 max_cluster_size_;
 
   // The mode that segment is in. If set to |kLive| the writer must not
   // seek backwards.
   Mode mode_;
 
-  // The file position of the element's size.
-  int64 size_position_;
+  // Flag telling the muxer that a new cluster should be started with the next
+  // frame.
+  bool new_cluster_;
+
+  // TODO: Should we add support for more than one Cues element?
+  // Flag whether or not the muxer should output a Cues element.
+  bool output_cues_;
 
   // The file position of the segment's payload.
   int64 payload_pos_;
 
-  // Maximum time in nanoseconds for a cluster duration. This variable is a
-  // guideline and some some clusters may have a longer duration. Defualt is
-  // 0 which signifies that the muxer will decide.
-  uint64 cluster_duration_;
+  // The file position of the element's size.
+  int64 size_position_;
 
-  int cluster_list_size_;
-  int cluster_list_capacity_;
-  Cluster** cluster_list_;
-  bool new_cluster_;
-  uint64 last_timestamp_;
-
-  // TODO: Should we add support for more than one Cues element?
-  bool output_cues_;
-  uint64 cues_track_;
-  Cues cues_;
+  IMkvWriter* writer_;
 
   // DISALLOW_COPY_AND_ASSIGN
   Segment(const Segment&);
