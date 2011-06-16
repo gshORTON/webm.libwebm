@@ -153,21 +153,26 @@ public:
 
   bool SetCodecPrivate(const uint8* codec_private, uint64 length);
 
-  uint64 number() const {return number_;}
-  void number(uint64 number) {number_ = number;}
-  
-  uint64 uid() const {return uid_;}
-  //void uid(uint64 uid) {uid_ = uid;}
-  
-  uint64 type() const {return type_;}
-  void type(uint64 type) {type_ = type;}
-
   const char* codec_id() const {return codec_id_;}
   void codec_id(const char* codec_id);
 
   const uint8* codec_private() const {return codec_private_;}
   const uint64 codec_private_length() const {return codec_private_length_;}
   
+  const char* language() const {return language_;}
+  void language(const char* language);
+  const char* name() const {return name_;}
+  void name(const char* name);
+
+  uint64 number() const {return number_;}
+  void number(uint64 number) {number_ = number;}
+  
+  uint64 type() const {return type_;}
+  void type(uint64 type) {type_ = type;}
+
+  uint64 uid() const {return uid_;}
+  //void uid(uint64 uid) {uid_ = uid;}
+
 private:
   // Returns a random number to be used for the Track UID.
   static uint64 MakeUID();
@@ -175,12 +180,15 @@ private:
   // Flag telling if the rand call was seeded.
   static bool is_seeded_;
 
-  uint64 number_;
-  const uint64 uid_;
-  uint64 type_;
-
+  // Track element names
   char* codec_id_;
   uint8* codec_private_;
+  char* language_;
+  char* name_;
+  uint64 number_;
+  uint64 type_;
+  const uint64 uid_;
+
   uint64 codec_private_length_;
 
   // DISALLOW_COPY_AND_ASSIGN
@@ -194,6 +202,9 @@ public:
   VideoTrack();
   virtual ~VideoTrack();
 
+  // Sets the video's stereo mode. Returns true on success.
+  bool SetStereoMode(uint64 stereo_mode);
+
   virtual uint64 Size() const;
   virtual uint64 PayloadSize() const;
   virtual bool Write(IMkvWriter* writer) const;
@@ -204,9 +215,29 @@ public:
   uint64 height() const {return height_;}
   void height(uint64 height) {height_ = height;}
 
+  uint64 display_width() const {return display_width_;}
+  void display_width(uint64 width) {display_width_ = width;}
+
+  uint64 display_height() const {return display_height_;}
+  void display_height(uint64 height) {display_height_ = height;}
+
+  double frame_rate() const {return frame_rate_;}
+  void frame_rate(double frame_rate) {frame_rate_ = frame_rate;}
+
+  //uint64 stereo_mode() const {return stereo_mode_;}
+  void stereo_mode(uint64 stereo_mode) {stereo_mode_ = stereo_mode;}
+
 private:
+  // Returns the size in bytes of the Video element.
+  uint64 VideoPayloadSize() const;
+
   uint64 width_;
   uint64 height_;
+  uint64 display_width_;
+  uint64 display_height_;
+
+  double frame_rate_;
+  uint64 stereo_mode_;
 
   // DISALLOW_COPY_AND_ASSIGN
   VideoTrack(const VideoTrack&);

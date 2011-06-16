@@ -31,6 +31,13 @@ static void Usage() {
   printf("                            0 outputs cues on audio track\n");
   printf("-max_cluster_duration <double> in seconds\n");
   printf("-max_cluster_size <int>     in bytes\n");
+  printf("\n");
+  printf("Video options:\n");
+  printf("-display_width <int>        Display width in pixels\n");
+  printf("-display_height <int>       Display height in pixels\n");
+  printf("-stereo_mode <int>          3D video mode\n");
+  printf("\n");
+  printf("Cues options:\n");
   printf("-output_cues_block_number <int> >0 outputs cue block number\n");
 }
 
@@ -49,7 +56,13 @@ int main(int argc, char* argv[]) {
 
   bool output_cues_block_number = true;
 
+  unsigned long long display_width = 0;
+  unsigned long long display_height = 0;
+  unsigned long long stereo_mode = 0;
+
   for (int i=1; i<argc; ++i) {
+    char* end;
+
     if ( (!strcmp("-h", argv[i])) || (!strcmp("-?", argv[i])) ) {
       Usage();
       return 0;
@@ -58,30 +71,28 @@ int main(int argc, char* argv[]) {
     } else if (!strcmp("-o", argv[i])) {
       output = argv[++i];
     } else if (!strcmp("-video", argv[i])) {
-      char* end;
       output_video = strtol(argv[++i], &end, 10) == 0 ? false : true;
     } else if (!strcmp("-audio", argv[i])) {
-      char* end;
       output_audio = strtol(argv[++i], &end, 10) == 0 ? false : true;
     } else if (!strcmp("-live", argv[i])) {
-      char* end;
       live_mode = strtol(argv[++i], &end, 10) == 0 ? false : true;
     } else if (!strcmp("-output_cues", argv[i])) {
-      char* end;
       output_cues = strtol(argv[++i], &end, 10) == 0 ? false : true;
     } else if (!strcmp("-cues_on_video_track", argv[i])) {
-      char* end;
       cues_on_video_track = strtol(argv[++i], &end, 10) == 0 ? false : true;
     } else if (!strcmp("-max_cluster_duration", argv[i])) {
-      char* end;
       const double seconds = strtod(argv[++i], &end);
       max_cluster_duration =
         static_cast<unsigned long long>(seconds * 1000000000.0);
     } else if (!strcmp("-max_cluster_size", argv[i])) {
-      char* end;
       max_cluster_size = strtol(argv[++i], &end, 10);
+    } else if (!strcmp("-display_width", argv[i])) {
+      display_width = strtol(argv[++i], &end, 10);
+    } else if (!strcmp("-display_height", argv[i])) {
+      display_height = strtol(argv[++i], &end, 10);
+    } else if (!strcmp("-stereo_mode", argv[i])) {
+      stereo_mode = strtol(argv[++i], &end, 10);
     } else if (!strcmp("-output_cues_block_number", argv[i])) {
-      char* end;
       output_cues_block_number =
         strtol(argv[++i], &end, 10) == 0 ? false : true;
     }
@@ -164,6 +175,9 @@ int main(int argc, char* argv[]) {
     if (pTrack == NULL)
       continue;
 
+    // TODO: Add support for language to parser.
+    const char* track_name = pTrack->GetNameAsUTF8();
+
     const long long trackType = pTrack->GetType();
 
     if (trackType == VIDEO_TRACK && output_video) {
@@ -181,18 +195,28 @@ int main(int argc, char* argv[]) {
         return -1;
       }
 
-      /*
-      mkvmuxer::Track* video = segment.GetTrackByNumber(vid_track);
+      mkvmuxer::VideoTrack* video =
+        static_cast<mkvmuxer::VideoTrack*>(
+            segment.GetTrackByNumber(vid_track));
       if (!video) {
         printf("\n Could not get video track.\n");
         return -1;
       }
 
+      if (track_name)
+        video->name(track_name);
+
+      if (display_width > 0)
+        video->display_width(display_width);
+      if (display_height > 0)
+        video->display_height(display_height);
+      if (stereo_mode > 0)
+        video->SetStereoMode(stereo_mode);
+
       const double rate = pVideoTrack->GetFrameRate();
       if (rate > 0.0) {
-        video->framerate(rate);
+        video->frame_rate(rate);
       }
-      */
     }
     else if (trackType == AUDIO_TRACK && output_audio) {
       // Get the audio track from the parser
@@ -216,6 +240,9 @@ int main(int argc, char* argv[]) {
         printf("\n Could not get audio track.\n");
         return -1;
       }
+
+      if (track_name)
+        audio->name(track_name);
 
       size_t private_size;
       const unsigned char* private_data =

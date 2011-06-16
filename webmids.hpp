@@ -119,7 +119,7 @@ enum MkvId {
   //video
   kMkvVideo                   = 0xE0,
   kMkvFlagInterlaced          = 0x9A,
-  //  StereoMode   = 0x53B8,
+  kMkvStereoMode              = 0x53B8,
   kMkvPixelWidth              = 0xB0,
   kMkvPixelHeight             = 0xBA,
   kMkvPixelCropBottom         = 0x54AA,

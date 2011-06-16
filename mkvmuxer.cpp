@@ -245,17 +245,32 @@ bool Cues::Write(IMkvWriter* writer) const {
 
 VideoTrack::VideoTrack()
     : width_(0),
-      height_(0) {
+      height_(0),
+      display_width_(0),
+      display_height_(0),
+      frame_rate_(0.0),
+      stereo_mode_(0) {
 }
 
 VideoTrack::~VideoTrack() {
 }
 
+bool VideoTrack::SetStereoMode(uint64 stereo_mode) {
+  if (stereo_mode != 0 &&
+      stereo_mode != 1 &&
+      stereo_mode != 2 &&
+      stereo_mode != 3 &&
+      stereo_mode != 11)
+    return false;
+
+  stereo_mode_ = stereo_mode;
+  return true;
+}
+
 uint64 VideoTrack::Size() const {
   const uint64 parent_size = Track::Size();
 
-  uint64 size = EbmlElementSize(kMkvPixelWidth, width_, false);
-  size += EbmlElementSize(kMkvPixelHeight, height_, false);
+  uint64 size = VideoPayloadSize();
   size += EbmlElementSize(kMkvVideo, size, true);
 
   return parent_size + size;
@@ -264,8 +279,7 @@ uint64 VideoTrack::Size() const {
 uint64 VideoTrack::PayloadSize() const {
   const uint64 parent_size = Track::PayloadSize();
 
-  uint64 size = EbmlElementSize(kMkvPixelWidth, width_, false);
-  size += EbmlElementSize(kMkvPixelHeight, height_, false);
+  uint64 size = VideoPayloadSize();
   size += EbmlElementSize(kMkvVideo, size, true);
 
   return parent_size + size;
@@ -277,9 +291,7 @@ bool VideoTrack::Write(IMkvWriter* writer) const {
   if (!Track::Write(writer))
     return false;
 
-  // Calculate VideoSettings size.
-  uint64 size = EbmlElementSize(kMkvPixelWidth, width_, false);
-  size += EbmlElementSize(kMkvPixelHeight, height_, false);
+  uint64 size = VideoPayloadSize();
 
   if (!WriteEbmlMasterElement(writer, kMkvVideo, size))
     return false;
@@ -292,6 +304,20 @@ bool VideoTrack::Write(IMkvWriter* writer) const {
     return false;
   if (!WriteEbmlElement(writer, kMkvPixelHeight, height_))
     return false;
+  if (display_width_ > 0)
+    if (!WriteEbmlElement(writer, kMkvDisplayWidth, display_width_))
+      return false;
+  if (display_height_ > 0)
+    if (!WriteEbmlElement(writer, kMkvDisplayHeight, display_height_))
+      return false;
+  if (stereo_mode_ > 0)
+    if (!WriteEbmlElement(writer, kMkvStereoMode, stereo_mode_))
+      return false;
+  if (frame_rate_ > 0.0)
+    if (!WriteEbmlElement(writer,
+                          kMkvFrameRate,
+                          static_cast<float>(frame_rate_)))
+      return false;
 
   const int64 stop_position = writer->Position();
   if (stop_position < 0)
@@ -299,6 +325,23 @@ bool VideoTrack::Write(IMkvWriter* writer) const {
   assert(stop_position - payload_position == size);
 
   return true;
+}
+
+uint64 VideoTrack::VideoPayloadSize() const {
+  uint64 size = EbmlElementSize(kMkvPixelWidth, width_, false);
+  size += EbmlElementSize(kMkvPixelHeight, height_, false);
+  if (display_width_ > 0)
+    size += EbmlElementSize(kMkvDisplayWidth, display_width_, false);
+  if (display_height_ > 0)
+    size += EbmlElementSize(kMkvDisplayHeight, display_height_, false);
+  if (stereo_mode_ > 0)
+    size += EbmlElementSize(kMkvStereoMode, stereo_mode_, false);
+  if (frame_rate_ > 0.0)
+    size += EbmlElementSize(kMkvFrameRate,
+                            static_cast<float>(frame_rate_),
+                            false);
+
+  return size;
 }
 
 AudioTrack::AudioTrack()
@@ -378,11 +421,13 @@ bool AudioTrack::Write(IMkvWriter* writer) const {
 }
 
 Track::Track()
-    : number_(0),
-      uid_(MakeUID()),
-      type_(0),
-      codec_id_(NULL),
+    : codec_id_(NULL),
       codec_private_(NULL),
+      language_(NULL),
+      name_(NULL),
+      number_(0),
+      type_(0),
+      uid_(MakeUID()),
       codec_private_length_(0) {
 }
 
@@ -416,6 +461,10 @@ uint64 Track::PayloadSize() const {
                             codec_private_,
                             codec_private_length_,
                             false);
+  if (language_)
+    size += EbmlElementSize(kMkvLanguage, language_, false);
+  if (name_)
+    size += EbmlElementSize(kMkvName, name_, false);
 
   return size;
 }
@@ -440,6 +489,10 @@ bool Track::Write(IMkvWriter* writer) const {
                             codec_private_,
                             codec_private_length_,
                             false);
+  if (language_)
+    test += EbmlElementSize(kMkvLanguage, language_, false);
+  if (name_)
+    test += EbmlElementSize(kMkvName, name_, false);
 
   const int64 payload_position = writer->Position();
   if (payload_position < 0)
@@ -460,6 +513,14 @@ bool Track::Write(IMkvWriter* writer) const {
                           kMkvCodecPrivate,
                           codec_private_,
                           codec_private_length_))
+      return false;
+  }
+  if (language_) {
+    if (!WriteEbmlElement(writer, kMkvLanguage, language_))
+      return false;
+  }
+  if (name_) {
+    if (!WriteEbmlElement(writer, kMkvName, name_))
       return false;
   }
 
@@ -501,6 +562,41 @@ void Track::codec_id(const char* codec_id) {
     strcpy_s(codec_id_, length, codec_id);
 #else
     strcpy(codec_id_, codec_id);
+#endif
+  }
+}
+
+// TODO: Vet the language parameter.
+void Track::language(const char* language) {
+  assert(language);
+
+  if (language_)
+    delete [] language_;
+
+  int length = strlen(language) + 1;
+  language_ = new (std::nothrow) char[length];
+  if (language_) {
+#ifdef WIN32
+    strcpy_s(language_, length, language);
+#else
+    strcpy(language_, language);
+#endif
+  }
+}
+
+void Track::name(const char* name) {
+  assert(name);
+
+  if (name_)
+    delete [] name_;
+
+  int length = strlen(name) + 1;
+  name_ = new (std::nothrow) char[length];
+  if (name_) {
+#ifdef WIN32
+    strcpy_s(name_, length, name);
+#else
+    strcpy(name_, name);
 #endif
   }
 }
