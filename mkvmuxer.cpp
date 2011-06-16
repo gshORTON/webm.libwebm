@@ -1154,7 +1154,9 @@ bool Segment::Finalize() {
       assert(size_position_ != -1);
 
       const int64 pos = writer_->Position();
-      const int64 segment_size = pos - size_position_;
+
+      // -8 for the size of the segment size
+      const int64 segment_size = pos - size_position_ - 8;
       assert(segment_size > 0);
 
       if (writer_->Position(size_position_))
