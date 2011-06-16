@@ -715,7 +715,7 @@ bool Cluster::WriteClusterHeader() {
 
   // Write "unknown" (-1) as cluster size value. We need to write 8 bytes
   // because we do not know how big our cluster will be.
-  if (SerializeInt(writer_, -1, 8))
+  if (SerializeInt(writer_, 0x01FFFFFFFFFFFFFFULL, 8))
     return false;
 
   if (!WriteEbmlElement(writer_, kMkvTimecode, timecode()))
@@ -1026,7 +1026,7 @@ bool Segment::Finalize() {
    return false;
 
   if (mode_ == kFile) {
-    if (cluster_list_size_ > 1) {
+    if (cluster_list_size_ > 0) {
       // Update last cluster's size
       Cluster* old_cluster = cluster_list_[cluster_list_size_-1];
       assert(old_cluster);
@@ -1161,16 +1161,21 @@ bool Segment::AddFrame(uint8* frame,
   // Check to see if the muxer needs to start a new cluster.
   if (is_key && m_tracks_.TrackIsVideo(track_number)) {
     new_cluster_ = true;
-  } else if (max_cluster_duration_ > 0 &&
-             (timestamp - last_timestamp_) >= max_cluster_duration_) {
-    new_cluster_ = true;
-  } else if (max_cluster_size_ > 0 && cluster_list_size_ > 0) {
+  } else if (cluster_list_size_ > 0 ) {
     Cluster* cluster = cluster_list_[cluster_list_size_-1];
     assert(cluster);
-    if (cluster->payload_size() >= max_cluster_size_) {
-      new_cluster_ = true;
+    const uint64 cluster_ts =
+      cluster->timecode() * segment_info_.timecode_scale();
+
+    if (max_cluster_duration_ > 0 &&
+      (timestamp - cluster_ts) >= max_cluster_duration_) {
+        new_cluster_ = true;
+    } else if (max_cluster_size_ > 0 && cluster_list_size_ > 0) {
+      if (cluster->payload_size() >= max_cluster_size_) {
+        new_cluster_ = true;
+      }
     }
-  } 
+  }
 
   if (new_cluster_) {
     const int new_size = cluster_list_size_ + 1;
@@ -1198,9 +1203,10 @@ bool Segment::AddFrame(uint8* frame,
     if (!WriteFramesLessThan(timestamp))
       return false;
 
+    uint64 audio_timecode = 0;
     uint64 timecode = timestamp / segment_info_.timecode_scale();
     if (frames_size_ > 0) {
-      uint64 audio_timecode =
+      audio_timecode =
         frames_[0]->timestamp() / segment_info_.timecode_scale();
 
       // Update the cluster's timecode to match the first audio frame.
@@ -1230,15 +1236,22 @@ bool Segment::AddFrame(uint8* frame,
         CuePoint* cue = new (std::nothrow) CuePoint();
         assert(cue);
 
-        // The timestamp should be for the frame that triggered a new cluster.
-        // I.E. In a muxed audio and video file the cue time should point to
-        // the video frame.
-        cue->time(timestamp / segment_info_.timecode_scale());
+        // TODO: Fix issue when audio and video are muxed and the first frame
+        // is not the frame that is associated with the cues.
+        if (cues_track_ == track_number) {
+          // The cue timestamp is set to the track of the frame passed into
+          // this function.
+          cue->time(timestamp / segment_info_.timecode_scale());
 
-        if (frames_size_ > 0) {
-          // The audio frames queued will be written before the first video
-          // frame.
-          cue->block_number(frames_size_ + 1);
+          if (frames_size_ > 0) {
+            // The audio frames queued will be written before the first video
+            // frame.
+            cue->block_number(frames_size_ + 1);
+          }
+        } else {
+          // The cue timestamp is set to the track of the frames that are
+          // queued.
+          cue->time(audio_timecode);
         }
         cue->cluster_pos(writer_->Position() - payload_pos_);
         cue->track(cues_track_);
@@ -1303,7 +1316,7 @@ bool Segment::WriteSegmentHeader() {
 
   // We need to write 8 bytes because if we are going to overwrite the segment
   // size later we do not know how big our segment will be.
-  if (SerializeInt(writer_, -1, 8))
+  if (SerializeInt(writer_, 0x01FFFFFFFFFFFFFFULL, 8))
     return false;
 
   payload_pos_ =  writer_->Position();
@@ -1313,10 +1326,10 @@ bool Segment::WriteSegmentHeader() {
     // the muxer is done writing we will set the correct duration and have
     // SegmentInfo upadte it.
     segment_info_.duration(1.0);
-  }
 
-  if (!seek_head_.Write(writer_))
-    return false;
+    if (!seek_head_.Write(writer_))
+      return false;
+  }
 
   if (!seek_head_.AddSeekEntry(kMkvInfo, writer_->Position() - payload_pos_))
     return false;

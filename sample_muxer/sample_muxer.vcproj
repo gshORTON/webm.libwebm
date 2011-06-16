@@ -61,7 +61,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="..\Debug\mkvmuxer.lib"
+				AdditionalDependencies="..\Debug\mkvparser.lib ..\Debug\mkvmuxer.lib"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				SubSystem="1"
