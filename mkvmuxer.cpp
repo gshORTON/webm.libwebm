@@ -639,7 +639,8 @@ bool Tracks::Write(IMkvWriter* writer) const {
 }
 
 Cluster::Cluster(uint64 timecode, IMkvWriter* writer)
-: timecode_(timecode),
+: blocks_added_(0),
+  timecode_(timecode),
   writer_(writer),
   finalized_(false),
   header_written_(false),
@@ -672,6 +673,7 @@ bool Cluster::AddFrame(const uint8* frame,
     return false;
 
   AddPayloadSize(element_size);
+  blocks_added_++;
 
   return true;
 }
@@ -986,6 +988,7 @@ Segment::Segment(IMkvWriter* writer)
   has_video_(false),
   header_written_(false),
   new_cluster_(true),
+  new_cuepoint_(false),
   size_position_(0),
   payload_pos_(0),
   mode_(kFile),
@@ -1232,32 +1235,8 @@ bool Segment::AddFrame(uint8* frame,
           return false;
       }
 
-      if (output_cues_) {
-        CuePoint* cue = new (std::nothrow) CuePoint();
-        assert(cue);
-
-        // TODO: Fix issue when audio and video are muxed and the first frame
-        // is not the frame that is associated with the cues.
-        if (cues_track_ == track_number) {
-          // The cue timestamp is set to the track of the frame passed into
-          // this function.
-          cue->time(timestamp / segment_info_.timecode_scale());
-
-          if (frames_size_ > 0) {
-            // The audio frames queued will be written before the first video
-            // frame.
-            cue->block_number(frames_size_ + 1);
-          }
-        } else {
-          // The cue timestamp is set to the track of the frames that are
-          // queued.
-          cue->time(audio_timecode);
-        }
-        cue->cluster_pos(writer_->Position() - payload_pos_);
-        cue->track(cues_track_);
-        if (!cues_.AddCue(cue))
-          return false;
-      }
+      if (output_cues_)
+        new_cuepoint_ = true;
     }
 
     new_cluster_ = false;
@@ -1274,6 +1253,11 @@ bool Segment::AddFrame(uint8* frame,
   int64 block_timecode = timestamp / segment_info_.timecode_scale();
   block_timecode -= static_cast<int64>(cluster->timecode());
   assert(block_timecode >= 0);
+
+  if (new_cuepoint_ && cues_track_ == track_number) {
+    if (!AddCuePoint(timestamp))
+      return false;
+  }
 
   if (!cluster->AddFrame(frame,
                          length,
@@ -1345,6 +1329,25 @@ bool Segment::WriteSegmentHeader() {
   return true;
 }
 
+bool Segment::AddCuePoint(uint64 timestamp) {
+  assert(cluster_list_size_ > 0);
+  Cluster* cluster = cluster_list_[cluster_list_size_-1];
+  assert(cluster);
+
+  CuePoint* cue = new (std::nothrow) CuePoint();
+  if (!cue)
+    return false;
+
+  cue->time(timestamp / segment_info_.timecode_scale());
+  cue->block_number(cluster->blocks_added() + 1);
+  cue->cluster_pos(writer_->Position() - payload_pos_);
+  cue->track(cues_track_);
+  if (!cues_.AddCue(cue))
+    return false;
+
+  new_cuepoint_ = false;
+  return true;
+}
 
 bool Segment::QueueFrame(Frame* frame) {
   const int new_size = frames_size_ + 1;
@@ -1381,9 +1384,15 @@ bool Segment::WriteFramesAll() {
     for (int i=0; i<frames_size_; ++i) {
       Frame* const frame = frames_[i];
 
-      int64 block_timecode = frame->timestamp() / segment_info_.timecode_scale();
+      int64 block_timecode =
+        frame->timestamp() / segment_info_.timecode_scale();
       block_timecode -= static_cast<int64>(cluster->timecode());
       assert(block_timecode >= 0);
+
+      if (new_cuepoint_ && cues_track_ == frame->track_number()) {
+        if (!AddCuePoint(frame->timestamp()))
+          return false;
+      }
 
       if (!cluster->AddFrame(frame->frame(),
                              frame->length(),
@@ -1426,6 +1435,11 @@ bool Segment::WriteFramesLessThan(uint64 timestamp) {
       int64 block_timecode = frame_prev->timestamp() / segment_info_.timecode_scale();
       block_timecode -= static_cast<int64>(cluster->timecode());
       assert(block_timecode >= 0);
+
+      if (new_cuepoint_ && cues_track_ == frame_prev->track_number()) {
+        if (!AddCuePoint(frame_prev->timestamp()))
+          return false;
+      }
 
       if (!cluster->AddFrame(frame_prev->frame(),
                              frame_prev->length(),

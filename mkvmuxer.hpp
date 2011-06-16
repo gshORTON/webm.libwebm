@@ -303,6 +303,8 @@ public:
   // cluster's size if |writer_| is seekable. Returns true on success.
   bool Finalize();
 
+  int blocks_added() const {return blocks_added_;}
+
   uint64 timecode() const {return timecode_;}
 
   uint64 payload_size() const {return payload_size_;}
@@ -310,6 +312,9 @@ public:
 private:
   // Outputs the Cluster header to |writer_|. Returns true on success.
   bool WriteClusterHeader();
+
+  // Number of blocks added to the cluster.
+  int blocks_added_;
 
   // The timecode of the cluster.
   const uint64 timecode_;
@@ -482,6 +487,10 @@ public:
   uint64 cues_track() const {return cues_track_;}
 
 private:
+  // Adds a cue point to the Cues element. |timestamp| is the time in
+  // nanoseconds of the cue's time. Returns true on success.
+  bool AddCuePoint(uint64 timestamp);
+
   // Adds the frame to our frame array.
   bool QueueFrame(Frame* frame);
 
@@ -542,6 +551,9 @@ private:
   // Flag telling the muxer that a new cluster should be started with the next
   // frame.
   bool new_cluster_;
+
+  // Flag telling the muxer that a new cue point should be added.
+  bool new_cuepoint_;
 
   // TODO: Should we add support for more than one Cues element?
   // Flag whether or not the muxer should output a Cues element.
