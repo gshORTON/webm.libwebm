@@ -29,9 +29,7 @@ class IMkvWriter {
   virtual ~IMkvWriter();
 
  private:
-    // DISALLOW_COPY_AND_ASSIGN
-    IMkvWriter(const IMkvWriter&);
-    IMkvWriter& operator=(const IMkvWriter&);
+  DISALLOW_COPY_AND_ASSIGN(IMkvWriter);
 };
 
 // Writes out the EBML header for a WebM file. This function must be called
@@ -102,10 +100,7 @@ private:
   // block number is different than the defualt of 1. Default is set to true. 
   bool output_block_number_;
 
-
-  // DISALLOW_COPY_AND_ASSIGN
-  CuePoint(const CuePoint&);
-  CuePoint& operator=(const CuePoint&);
+  DISALLOW_COPY_AND_ASSIGN(CuePoint);
 };
 
 class Cues {
@@ -136,9 +131,7 @@ private:
   // block number is different than the defualt of 1. Default is set to true. 
   bool output_block_number_;
 
-  // DISALLOW_COPY_AND_ASSIGN
-  Cues(const Cues&);
-  Cues& operator=(const Cues&);
+  DISALLOW_COPY_AND_ASSIGN(Cues);
 };
 
 class Track {
@@ -157,7 +150,7 @@ public:
   void codec_id(const char* codec_id);
 
   const uint8* codec_private() const {return codec_private_;}
-  const uint64 codec_private_length() const {return codec_private_length_;}
+  uint64 codec_private_length() const {return codec_private_length_;}
   
   const char* language() const {return language_;}
   void language(const char* language);
@@ -191,9 +184,7 @@ private:
 
   uint64 codec_private_length_;
 
-  // DISALLOW_COPY_AND_ASSIGN
-  Track(const Track&);
-  Track& operator=(const Track&);
+  DISALLOW_COPY_AND_ASSIGN(Track);
 };
 
 
@@ -239,9 +230,7 @@ private:
   double frame_rate_;
   uint64 stereo_mode_;
 
-  // DISALLOW_COPY_AND_ASSIGN
-  VideoTrack(const VideoTrack&);
-  VideoTrack& operator=(const VideoTrack&);
+  DISALLOW_COPY_AND_ASSIGN(VideoTrack);
 };
 
 class AudioTrack : public Track {
@@ -267,9 +256,7 @@ private:
   uint64 channels_;
   double sample_rate_;
 
-  // DISALLOW_COPY_AND_ASSIGN
-  AudioTrack(const AudioTrack&);
-  AudioTrack& operator=(const AudioTrack&);
+  DISALLOW_COPY_AND_ASSIGN(AudioTrack);
 };
 
 class Tracks {
@@ -277,8 +264,8 @@ public:
   Tracks();
   ~Tracks();
 
-  static const int kVideo = 0x1;
-  static const int kAudio = 0x2;
+  static const uint64 kVideo = 0x1;
+  static const uint64 kAudio = 0x2;
 
   bool AddTrack(Track* track);
 
@@ -300,12 +287,10 @@ public:
   bool Write(IMkvWriter* writer) const;
 
 private:
-  unsigned int m_trackEntriesSize;
   Track** m_trackEntries;
+  unsigned int m_trackEntriesSize;
 
-  // DISALLOW_COPY_AND_ASSIGN
-  Tracks(const Tracks&);
-  Tracks& operator=(const Tracks&);
+  DISALLOW_COPY_AND_ASSIGN(Tracks);
 };
 
 class Cluster {
@@ -364,9 +349,7 @@ private:
   // The file position of the size.
   int64 size_position_;
 
-  // DISALLOW_COPY_AND_ASSIGN
-  Cluster(const Cluster&);
-  Cluster& operator=(const Cluster&);
+  DISALLOW_COPY_AND_ASSIGN(Cluster);
 };
 
 class SeekHead {
@@ -399,9 +382,7 @@ private:
   // The file position of SeekHead.
   int64 start_pos_;
 
-  // DISALLOW_COPY_AND_ASSIGN
-  SeekHead(const SeekHead&);
-  SeekHead& operator=(const SeekHead&);
+  DISALLOW_COPY_AND_ASSIGN(SeekHead);
 };
 
 class SegmentInfo {
@@ -440,23 +421,21 @@ private:
   char* writing_app_;
 
   // The file position of the duration.
-  uint64 duration_pos_;
+  int64 duration_pos_;
 
-  // DISALLOW_COPY_AND_ASSIGN
-  SegmentInfo(const SegmentInfo&);
-  SegmentInfo& operator=(const SegmentInfo&);
+  DISALLOW_COPY_AND_ASSIGN(SegmentInfo);
 };
 
 // This class represents the main segment in a WebM file.
 class Segment {
 public:
-  explicit Segment(IMkvWriter* writer);
-  virtual ~Segment();
-
   enum Mode {
     kLive = 0x1,
     kFile = 0x2
   };
+
+  explicit Segment(IMkvWriter* writer);
+  virtual ~Segment();
 
   // Adds a video track to the segment. Returns the number of the track on
   // success, 0 on error.
@@ -542,8 +521,8 @@ private:
 
   // List of clusters.
   Cluster** cluster_list_;
-  int cluster_list_size_;
   int cluster_list_capacity_;
+  int cluster_list_size_;
 
   // Track number that is associated with the cues element for this segment.
   uint64 cues_track_;
@@ -553,8 +532,8 @@ private:
   // key frame's timecode should be in the same cluster as the video key frame
   // block."
   Frame** frames_;
-  int frames_size_;
   int frames_capacity_;
+  int frames_size_;
 
   // Flag telling if a video track has been added to the segment.
   bool has_video_;
@@ -598,9 +577,7 @@ private:
 
   IMkvWriter* writer_;
 
-  // DISALLOW_COPY_AND_ASSIGN
-  Segment(const Segment&);
-  Segment& operator=(const Segment&);
+  DISALLOW_COPY_AND_ASSIGN(Segment);
 };
 
 }  //end namespace mkvmuxer

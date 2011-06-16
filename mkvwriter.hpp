@@ -35,9 +35,7 @@ public:
 private:
     FILE* file_;
 
-    // DISALLOW_COPY_AND_ASSIGN
-    MkvWriter(const MkvWriter&);
-    MkvWriter& operator=(const MkvWriter&);
+    DISALLOW_COPY_AND_ASSIGN(MkvWriter);
 };
 
 }  //end namespace mkvmuxer

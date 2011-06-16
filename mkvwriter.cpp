@@ -9,7 +9,9 @@
 #include "mkvwriter.hpp"
 #include <cassert>
 #include <new>
+#ifdef WIN32
 #include <share.h>
+#endif
 
 namespace mkvmuxer {
 

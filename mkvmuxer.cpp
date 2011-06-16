@@ -129,7 +129,7 @@ bool CuePoint::Write(IMkvWriter* writer) const {
   const int64 stop_position = writer->Position();
   if (stop_position < 0)
     return false;
-  assert(stop_position - payload_position == payload_size);
+  assert(stop_position - payload_position == static_cast<int64>(payload_size));
 
   return true;
 }
@@ -238,7 +238,7 @@ bool Cues::Write(IMkvWriter* writer) const {
   const int64 stop_position = writer->Position();
   if (stop_position < 0)
     return false;
-  assert(stop_position - payload_position == size);
+  assert(stop_position - payload_position == static_cast<int64>(size));
 
   return true;
 }
@@ -322,7 +322,7 @@ bool VideoTrack::Write(IMkvWriter* writer) const {
   const int64 stop_position = writer->Position();
   if (stop_position < 0)
     return false;
-  assert(stop_position - payload_position == size);
+  assert(stop_position - payload_position == static_cast<int64>(size));
 
   return true;
 }
@@ -415,7 +415,7 @@ bool AudioTrack::Write(IMkvWriter* writer) const {
   const int64 stop_position = writer->Position();
   if (stop_position < 0)
     return false;
-  assert(stop_position - payload_position == size);
+  assert(stop_position - payload_position == static_cast<int64>(size));
 
   return true;
 }
@@ -527,7 +527,7 @@ bool Track::Write(IMkvWriter* writer) const {
   const int64 stop_position = writer->Position();
   if (stop_position < 0)
     return false;
-  assert(stop_position - payload_position == test);
+  assert(stop_position - payload_position == static_cast<int64>(test));
 
   return true;
 }
@@ -729,7 +729,7 @@ bool Tracks::Write(IMkvWriter* writer) const {
   const int64 stop_position = writer->Position();
   if (stop_position < 0)
     return false;
-  assert(stop_position - payload_position == size);
+  assert(stop_position - payload_position == static_cast<int64>(size));
 
   return true;
 }
@@ -1054,7 +1054,7 @@ bool SegmentInfo::Write(IMkvWriter* writer) {
   const int64 stop_position = writer->Position();
   if (stop_position < 0)
     return false;
-  assert(stop_position - payload_position == size);
+  assert(stop_position - payload_position == static_cast<int64>(size));
 
   return true;
 }
@@ -1077,25 +1077,25 @@ void SegmentInfo::writing_app(const char* app) {
 }
 
 Segment::Segment(IMkvWriter* writer)
-: writer_(writer),
-  cluster_list_size_(0),
+: cluster_list_(NULL),
   cluster_list_capacity_(0),
-  cluster_list_(NULL),
+  cluster_list_size_(0),
+  cues_track_(0),
+  frames_(NULL),
+  frames_capacity_(0),
+  frames_size_(0),
   has_video_(false),
   header_written_(false),
-  new_cluster_(true),
-  new_cuepoint_(false),
-  size_position_(0),
-  payload_pos_(0),
-  mode_(kFile),
+  last_timestamp_(0),
   max_cluster_duration_(0),
   max_cluster_size_(0),
-  last_timestamp_(0),
+  mode_(kFile),
+  new_cluster_(true),
+  new_cuepoint_(false),
   output_cues_(true),
-  cues_track_(0),
-  frames_size_(0),
-  frames_capacity_(0),
-  frames_(NULL) {
+  payload_pos_(0),
+  size_position_(0),
+  writer_(writer) {
   assert(writer_);
 
   // TODO: Create an Init function for Segment.
@@ -1210,8 +1210,6 @@ bool Segment::AddFrame(uint8* frame,
                        uint64 timestamp,
                        bool is_key) {
   assert(frame);
-  assert(length >= 0);
-  assert(track_number >= 0);
 
   if (!header_written_) {
     if (!WriteSegmentHeader())

@@ -21,27 +21,29 @@ static void Usage() {
   printf("Usage: sample_muxer -i input -o output [options]\n");
   printf("\n");
   printf("Main options:\n");
-  printf("-h | -?                     show help\n");
-  printf("-video <int>                >0 outputs video\n");
-  printf("-audio <int>                >0 outputs audio\n");
-  printf("-live <int>                 >0 puts the muxer into live mode\n");    
-  printf("                            0 puts the muxer into file mode\n");
-  printf("-output_cues <int>          >0 outputs cues element\n");
-  printf("-cues_on_video_track <int>  >0 outputs cues on video track\n");
-  printf("                            0 outputs cues on audio track\n");
-  printf("-max_cluster_duration <double> in seconds\n");
-  printf("-max_cluster_size <int>     in bytes\n");
+  printf("  -h | -?                     show help\n");
+  printf("  -video <int>                >0 outputs video\n");
+  printf("  -audio <int>                >0 outputs audio\n");
+  printf("  -live <int>                 >0 puts the muxer into live mode\n");
+  printf("                              0 puts the muxer into file mode\n");
+  printf("  -output_cues <int>          >0 outputs cues element\n");
+  printf("  -cues_on_video_track <int>  >0 outputs cues on video track\n");
+  printf("                              0 outputs cues on audio track\n");
+  printf("  -max_cluster_duration <double> in seconds\n");
+  printf("  -max_cluster_size <int>     in bytes\n");
   printf("\n");
   printf("Video options:\n");
-  printf("-display_width <int>        Display width in pixels\n");
-  printf("-display_height <int>       Display height in pixels\n");
-  printf("-stereo_mode <int>          3D video mode\n");
+  printf("  -display_width <int>        Display width in pixels\n");
+  printf("  -display_height <int>       Display height in pixels\n");
+  printf("  -stereo_mode <int>          3D video mode\n");
   printf("\n");
   printf("Cues options:\n");
-  printf("-output_cues_block_number <int> >0 outputs cue block number\n");
+  printf("  -output_cues_block_number <int> >0 outputs cue block number\n");
 }
 
 int main(int argc, char* argv[]) {
+  using mkvmuxer::uint64;
+
   char* input = NULL;
   char* output = NULL;
 
@@ -51,14 +53,14 @@ int main(int argc, char* argv[]) {
   bool live_mode = false;
   bool output_cues = true;
   bool cues_on_video_track = true;
-  mkvmuxer::uint64 max_cluster_duration = 0;
-  mkvmuxer::uint64 max_cluster_size = 0;
+  uint64 max_cluster_duration = 0;
+  uint64 max_cluster_size = 0;
 
   bool output_cues_block_number = true;
 
-  unsigned long long display_width = 0;
-  unsigned long long display_height = 0;
-  unsigned long long stereo_mode = 0;
+  uint64 display_width = 0;
+  uint64 display_height = 0;
+  uint64 stereo_mode = 0;
 
   for (int i=1; i<argc; ++i) {
     char* end;
@@ -83,7 +85,7 @@ int main(int argc, char* argv[]) {
     } else if (!strcmp("-max_cluster_duration", argv[i])) {
       const double seconds = strtod(argv[++i], &end);
       max_cluster_duration =
-        static_cast<unsigned long long>(seconds * 1000000000.0);
+        static_cast<uint64>(seconds * 1000000000.0);
     } else if (!strcmp("-max_cluster_size", argv[i])) {
       max_cluster_size = strtol(argv[++i], &end, 10);
     } else if (!strcmp("-display_width", argv[i])) {
@@ -166,8 +168,8 @@ int main(int argc, char* argv[]) {
   enum { VIDEO_TRACK = 1, AUDIO_TRACK = 2 };
   const mkvparser::Tracks* pTracks = pSegment->GetTracks();
   unsigned long i = 0;
-  unsigned long long vid_track = 0; // no track added
-  unsigned long long aud_track = 0; // no track added
+  uint64 vid_track = 0; // no track added
+  uint64 aud_track = 0; // no track added
 
   while (i != pTracks->GetTracksCount()) {
     const mkvparser::Track* const pTrack = pTracks->GetTrackByIndex(i++);
@@ -295,7 +297,6 @@ int main(int argc, char* argv[]) {
 
         for (int i = 0; i < frameCount; ++i) {
           const mkvparser::Block::Frame& theFrame = pBlock->GetFrame(i);
-          const long size = theFrame.len;
 
           if (theFrame.len > data_len) {
             delete [] data;
@@ -308,7 +309,7 @@ int main(int argc, char* argv[]) {
           if (theFrame.Read(&reader, data))
             return -1;
 
-          unsigned long long track_num = vid_track;
+          uint64 track_num = vid_track;
           if (trackType == AUDIO_TRACK)
             track_num = aud_track;
 
