@@ -76,7 +76,7 @@ uint64 EbmlElementSize(uint64 type, float value, bool master) {
   uint64 ebml_size = GetUIntSize(type);
 
   // Datasize
-  ebml_size += sizeof(value); //4;
+  ebml_size += sizeof(value);
 
   // Size of Datasize
   if (!master)
@@ -121,10 +121,10 @@ uint64 EbmlElementSize(uint64 type,
 }
 
 int SerializeInt(
-    IMkvWriter* pWriter,
+    IMkvWriter* writer,
     int64 value,
     int size) {
-  assert(pWriter);
+  assert(writer);
   assert(size >= 0);
   assert(size <= 8);
 
@@ -135,7 +135,7 @@ int SerializeInt(
     const int64 bb = value >> bit_count;
     const uint8 b = static_cast<uint8>(bb);
 
-    const int status = pWriter->Write(&b, 1);
+    const int status = writer->Write(&b, 1);
 
     if (status < 0)
       return status;
@@ -144,8 +144,8 @@ int SerializeInt(
   return 0;
 }
 
-int SerializeFloat(IMkvWriter* pWriter, float f) {
-  assert(pWriter);
+int SerializeFloat(IMkvWriter* writer, float f) {
+  assert(writer);
   const unsigned long& val = reinterpret_cast<const unsigned long&>(f);
 
   for (int i = 1; i <= 4; ++i) {
@@ -155,7 +155,7 @@ int SerializeFloat(IMkvWriter* pWriter, float f) {
     const unsigned long bb = val >> bit_count;
     const uint8 b = static_cast<uint8>(bb);
 
-    const int status = pWriter->Write(&b, 1);
+    const int status = writer->Write(&b, 1);
 
     if (status < 0)
       return status;
@@ -164,15 +164,15 @@ int SerializeFloat(IMkvWriter* pWriter, float f) {
   return 0;
 }
 
-int WriteUInt(IMkvWriter* pWriter, uint64 value) {
-  assert(pWriter);
+int WriteUInt(IMkvWriter* writer, uint64 value) {
+  assert(writer);
   int size = GetCodedUIntSize(value);
 
-  return WriteUIntSize(pWriter, value, size);
+  return WriteUIntSize(writer, value, size);
 }
 
-int WriteUIntSize(IMkvWriter* pWriter, uint64 value, int size) {
-  assert(pWriter);
+int WriteUIntSize(IMkvWriter* writer, uint64 value, int size) {
+  assert(writer);
   assert(size >= 0);
 
   if (size > 0) {
@@ -200,129 +200,129 @@ int WriteUIntSize(IMkvWriter* pWriter, uint64 value, int size) {
     value |= bit;
   }
 
-  return SerializeInt(pWriter, value, size);
+  return SerializeInt(writer, value, size);
 }
 
-int WriteID(IMkvWriter* pWriter, uint64 type) {
-  assert(pWriter);
+int WriteID(IMkvWriter* writer, uint64 type) {
+  assert(writer);
   const int size = GetUIntSize(type);
 
-  return SerializeInt(pWriter, type, size);
+  return SerializeInt(writer, type, size);
 }
 
-bool WriteEbmlMasterElement(IMkvWriter* pWriter, uint64 type, uint64 size) {
-  assert(pWriter);
+bool WriteEbmlMasterElement(IMkvWriter* writer, uint64 type, uint64 size) {
+  assert(writer);
 
-  if (WriteID(pWriter, type))
+  if (WriteID(writer, type))
     return false;
 
-  if (WriteUInt(pWriter, size))
+  if (WriteUInt(writer, size))
     return false;
 
   return true;
 }
 
-bool WriteEbmlElement(IMkvWriter* pWriter, uint64 type, uint64 value) {
-  assert(pWriter);
+bool WriteEbmlElement(IMkvWriter* writer, uint64 type, uint64 value) {
+  assert(writer);
 
-  if (WriteID(pWriter, type))
+  if (WriteID(writer, type))
     return false;
 
   const uint64 size = GetUIntSize(value);
-  if (WriteUInt(pWriter, size))
+  if (WriteUInt(writer, size))
     return false;
 
-  if (SerializeInt(pWriter, value, static_cast<int>(size)))
-    return false;
-
-  return true;
-}
-
-bool WriteEbmlElement(IMkvWriter* pWriter, uint64 type, float value) {
-  assert(pWriter);
-
-  if (WriteID(pWriter, type))
-    return false;
-
-  if (WriteUInt(pWriter, 4))
-    return false;
-
-  if (SerializeFloat(pWriter, value))
+  if (SerializeInt(writer, value, static_cast<int>(size)))
     return false;
 
   return true;
 }
 
-bool WriteEbmlElement(IMkvWriter* pWriter, uint64 type, const char* value) {
-  assert(pWriter);
+bool WriteEbmlElement(IMkvWriter* writer, uint64 type, float value) {
+  assert(writer);
+
+  if (WriteID(writer, type))
+    return false;
+
+  if (WriteUInt(writer, 4))
+    return false;
+
+  if (SerializeFloat(writer, value))
+    return false;
+
+  return true;
+}
+
+bool WriteEbmlElement(IMkvWriter* writer, uint64 type, const char* value) {
+  assert(writer);
   assert(value != NULL);
 
-  if (WriteID(pWriter, type))
+  if (WriteID(writer, type))
     return false;
 
   const int length = strlen(value);
-  if (WriteUInt(pWriter, length))
+  if (WriteUInt(writer, length))
     return false;
 
-  if (pWriter->Write(value, length))
+  if (writer->Write(value, length))
     return false;
 
   return true;
 }
 
-bool WriteEbmlElement(IMkvWriter* pWriter,
+bool WriteEbmlElement(IMkvWriter* writer,
                       uint64 type,
                       const uint8* value,
                       uint64 size) {
-  assert(pWriter);
+  assert(writer);
   assert(value != NULL);
   assert(size > 0);
 
-  if (WriteID(pWriter, type))
+  if (WriteID(writer, type))
     return false;
 
-  if (WriteUInt(pWriter, size))
+  if (WriteUInt(writer, size))
     return false;
 
-  if (pWriter->Write(value, static_cast<unsigned long>(size)))
+  if (writer->Write(value, static_cast<unsigned long>(size)))
     return false;
 
   return true;
 }
 
-uint64 WriteSimpleBlock(IMkvWriter* pWriter,
+uint64 WriteSimpleBlock(IMkvWriter* writer,
                         const uint8* data,
                         uint64 length,
                         char track_number,
-                        short timestamp,
+                        short timecode,
                         bool is_key) {
-  assert(pWriter);
+  assert(writer);
   assert(data != NULL);
   assert(length > 0);
   assert(track_number > 0);
-  assert(timestamp >= 0);
+  assert(timecode >= 0);
 
-  if (WriteID(pWriter, kMkvSimpleBlock))
+  if (WriteID(writer, kMkvSimpleBlock))
     return 0;
 
   const int size = static_cast<int>(length) + 4;
-  if (WriteUInt(pWriter, size))
+  if (WriteUInt(writer, size))
     return 0;
 
-  if (WriteUInt(pWriter, static_cast<uint64>(track_number)))
+  if (WriteUInt(writer, static_cast<uint64>(track_number)))
     return 0;
 
-  if (SerializeInt(pWriter, static_cast<uint64>(timestamp), 2))
+  if (SerializeInt(writer, static_cast<uint64>(timecode), 2))
     return 0;
 
   uint64 flags = 0;
   if(is_key)
     flags |= 0x80;
 
-  if (SerializeInt(pWriter, flags, 1))
+  if (SerializeInt(writer, flags, 1))
     return 0;
 
-  if (pWriter->Write(data, static_cast<unsigned long>(length)))
+  if (writer->Write(data, static_cast<unsigned long>(length)))
     return 0;
 
   const uint64 element_size =
@@ -331,30 +331,30 @@ uint64 WriteSimpleBlock(IMkvWriter* pWriter,
   return element_size;
 }
 
-uint64 WriteVoidElement(IMkvWriter* pWriter, uint64 size) {
+uint64 WriteVoidElement(IMkvWriter* writer, uint64 size) {
   // Subtract one for the void ID and the coded size.
   uint64 void_entry_size = size - 1 - GetCodedUIntSize(size-1);
   uint64 void_size = EbmlElementSize(kMkvVoid, void_entry_size, true) +
                      void_entry_size;
   assert(void_size == size);
 
-  const int64 payload_position = pWriter->Position();
+  const int64 payload_position = writer->Position();
   if (payload_position < 0)
     return 0;
 
-  if (WriteID(pWriter, kMkvVoid))
+  if (WriteID(writer, kMkvVoid))
     return 0;
 
-  if (WriteUInt(pWriter, void_entry_size))
+  if (WriteUInt(writer, void_entry_size))
     return 0;
 
   uint8 value = 0;
   for (int i=0; i<static_cast<int>(void_entry_size); ++i) {
-    if (pWriter->Write(&value, 1))
+    if (writer->Write(&value, 1))
       return 0;
   }
 
-  const int64 stop_position = pWriter->Position();
+  const int64 stop_position = writer->Position();
   if (stop_position < 0)
     return 0;
   assert(stop_position - payload_position == static_cast<int64>(void_size));

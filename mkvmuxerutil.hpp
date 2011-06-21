@@ -31,38 +31,46 @@ uint64 EbmlElementSize(uint64 type,
                        bool master);
 
 // Creates an EBML coded number from |value| and writes it out. The size of
-// the coded number is deteremined by the value of |value|. |value| must not
+// the coded number is determined by the value of |value|. |value| must not
 // be in a coded form. Returns 0 on success.
-int WriteUInt(IMkvWriter* pWriter, uint64 value);
+int WriteUInt(IMkvWriter* writer, uint64 value);
 
 // Creates an EBML coded number from |value| and writes it out. The size of
-// the coded number is deteremined by the value of |size|. |value| must not
+// the coded number is determined by the value of |size|. |value| must not
 // be in a coded form. Returns 0 on success.
-int WriteUIntSize(IMkvWriter* pWriter, uint64 value, int size);
+int WriteUIntSize(IMkvWriter* writer, uint64 value, int size);
 
 // Output an Mkv master element. Returns true if the element was written.
-bool WriteEbmlMasterElement(IMkvWriter* pWriter, uint64 value, uint64 size);
+bool WriteEbmlMasterElement(IMkvWriter* writer, uint64 value, uint64 size);
 
 // Output an Mkv non-master element. Returns true if the element was written.
-bool WriteEbmlElement(IMkvWriter* pWriter, uint64 type, uint64 value);
-bool WriteEbmlElement(IMkvWriter* pWriter, uint64 type, float value);
-bool WriteEbmlElement(IMkvWriter* pWriter, uint64 type, const char* value);
-bool WriteEbmlElement(IMkvWriter* pWriter,
+bool WriteEbmlElement(IMkvWriter* writer, uint64 type, uint64 value);
+bool WriteEbmlElement(IMkvWriter* writer, uint64 type, float value);
+bool WriteEbmlElement(IMkvWriter* writer, uint64 type, const char* value);
+bool WriteEbmlElement(IMkvWriter* writer,
                       uint64 type,
                       const uint8* value,
                       uint64 size);
 
-uint64 WriteSimpleBlock(IMkvWriter* pWriter,
+// Output an Mkv Simple Block.
+// Inputs:
+//   data:         Pointer to the data.
+//   length:       Length of the data.
+//   track_number: Track to add the data to. Value returned by Add track
+//                 functions.
+//   timecode:     Relative timecode of the Block.
+//   is_key:       Flag telling whether or not this frame is a key frame.
+uint64 WriteSimpleBlock(IMkvWriter* writer,
                         const uint8* data,
                         uint64 length,
                         char track_number,
-                        short timestamp,
+                        short timecode,
                         bool is_key);
 
 // Output a void element. |size| must be the entire size in bytes that will be
 // void. The function will calculate the size of the void header and subtract
 // it from |size|.
-uint64 WriteVoidElement(IMkvWriter* pWriter, uint64 size);
+uint64 WriteVoidElement(IMkvWriter* writer, uint64 size);
 
 // Returns the version number of the muxer in |major|, |minor|, |build|,
 // and |revision|.

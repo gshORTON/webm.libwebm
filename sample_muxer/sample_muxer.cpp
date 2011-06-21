@@ -31,6 +31,7 @@ static void Usage() {
   printf("                              0 outputs cues on audio track\n");
   printf("  -max_cluster_duration <double> in seconds\n");
   printf("  -max_cluster_size <int>     in bytes\n");
+  printf("  -switch_tracks <int>        >0 switches tracks in output\n");
   printf("\n");
   printf("Video options:\n");
   printf("  -display_width <int>        Display width in pixels\n");
@@ -55,6 +56,7 @@ int main(int argc, char* argv[]) {
   bool cues_on_video_track = true;
   uint64 max_cluster_duration = 0;
   uint64 max_cluster_size = 0;
+  bool switch_tracks = false;
 
   bool output_cues_block_number = true;
 
@@ -88,6 +90,8 @@ int main(int argc, char* argv[]) {
         static_cast<uint64>(seconds * 1000000000.0);
     } else if (!strcmp("-max_cluster_size", argv[i])) {
       max_cluster_size = strtol(argv[++i], &end, 10);
+    } else if (!strcmp("-switch_tracks", argv[i])) {
+      switch_tracks = strtol(argv[++i], &end, 10) == 0 ? false : true;
     } else if (!strcmp("-display_width", argv[i])) {
       display_width = strtol(argv[++i], &end, 10);
     } else if (!strcmp("-display_height", argv[i])) {
@@ -114,24 +118,26 @@ int main(int argc, char* argv[]) {
   }
 
   long long pos = 0;
-  mkvparser::EBMLHeader ebmlHeader;
-  ebmlHeader.Parse(&reader, pos);
+  mkvparser::EBMLHeader ebml_header;
+  ebml_header.Parse(&reader, pos);
 
-  mkvparser::Segment* pSegment;
-  long long ret = mkvparser::Segment::CreateInstance(&reader, pos, pSegment);
+  mkvparser::Segment* parser_segment;
+  long long ret = mkvparser::Segment::CreateInstance(&reader,
+                                                     pos,
+                                                     parser_segment);
   if (ret) {
     printf("\n Segment::CreateInstance() failed.");
     return -1;
   }
 
-  ret  = pSegment->Load();
+  ret  = parser_segment->Load();
   if (ret < 0) {
     printf("\n Segment::Load() failed.");
     return -1;
   }
 
-  const mkvparser::SegmentInfo* const pSegmentInfo = pSegment->GetInfo();
-  const long long timeCodeScale = pSegmentInfo->GetTimeCodeScale();
+  const mkvparser::SegmentInfo* const segment_info = parser_segment->GetInfo();
+  const long long timeCodeScale = segment_info->GetTimeCodeScale();
 
   // Set muxer header info
   mkvmuxer::MkvWriter writer;
@@ -141,57 +147,57 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
-  if (!WriteEbmlHeader(&writer)) {
-    printf("\n Could not write EBML header.\n");
-    return -1;
-  }
-
   // Set Segment element attributes
-  mkvmuxer::Segment segment(&writer);
+  mkvmuxer::Segment muxer_segment(&writer);
   if (live_mode)
-    segment.mode(mkvmuxer::Segment::kLive);
+    muxer_segment.mode(mkvmuxer::Segment::kLive);
   else
-    segment.mode(mkvmuxer::Segment::kFile);
+    muxer_segment.mode(mkvmuxer::Segment::kFile);
 
   if (max_cluster_duration > 0)
-    segment.max_cluster_duration(max_cluster_duration);
+    muxer_segment.max_cluster_duration(max_cluster_duration);
   if (max_cluster_size > 0)
-    segment.max_cluster_size(max_cluster_size);
-  segment.OutputCues(output_cues);
+    muxer_segment.max_cluster_size(max_cluster_size);
+  muxer_segment.OutputCues(output_cues);
 
   // Set SegmentInfo element attributes
-  mkvmuxer::SegmentInfo* info = segment.GetSegmentInfo();
+  mkvmuxer::SegmentInfo* info = muxer_segment.GetSegmentInfo();
   info->timecode_scale(timeCodeScale);
   info->writing_app("sample_muxer");
   
   // Set Tracks element attributes
   enum { VIDEO_TRACK = 1, AUDIO_TRACK = 2 };
-  const mkvparser::Tracks* pTracks = pSegment->GetTracks();
+  const mkvparser::Tracks* parser_tracks = parser_segment->GetTracks();
   unsigned long i = 0;
   uint64 vid_track = 0; // no track added
   uint64 aud_track = 0; // no track added
 
-  while (i != pTracks->GetTracksCount()) {
-    const mkvparser::Track* const pTrack = pTracks->GetTrackByIndex(i++);
+  while (i != parser_tracks->GetTracksCount()) {
+    int track_num = i++;
+    if (switch_tracks)
+      track_num = i % parser_tracks->GetTracksCount();
 
-    if (pTrack == NULL)
+    const mkvparser::Track* const parser_track =
+      parser_tracks->GetTrackByIndex(track_num);
+
+    if (parser_track == NULL)
       continue;
 
     // TODO: Add support for language to parser.
-    const char* track_name = pTrack->GetNameAsUTF8();
+    const char* track_name = parser_track->GetNameAsUTF8();
 
-    const long long trackType = pTrack->GetType();
+    const long long track_type = parser_track->GetType();
 
-    if (trackType == VIDEO_TRACK && output_video) {
+    if (track_type == VIDEO_TRACK && output_video) {
       // Get the video track from the parser
       const mkvparser::VideoTrack* const pVideoTrack =
-        static_cast<const mkvparser::VideoTrack*>(pTrack);
+        static_cast<const mkvparser::VideoTrack*>(parser_track);
       const long long width =  pVideoTrack->GetWidth();
       const long long height = pVideoTrack->GetHeight();
       
       // Add the video track to the muxer
-      vid_track = segment.AddVideoTrack(static_cast<int>(width),
-                                        static_cast<int>(height));
+      vid_track = muxer_segment.AddVideoTrack(static_cast<int>(width),
+                                              static_cast<int>(height));
       if (!vid_track) {
         printf("\n Could not add video track.\n");
         return -1;
@@ -199,7 +205,7 @@ int main(int argc, char* argv[]) {
 
       mkvmuxer::VideoTrack* video =
         static_cast<mkvmuxer::VideoTrack*>(
-            segment.GetTrackByNumber(vid_track));
+            muxer_segment.GetTrackByNumber(vid_track));
       if (!video) {
         printf("\n Could not get video track.\n");
         return -1;
@@ -220,16 +226,16 @@ int main(int argc, char* argv[]) {
         video->frame_rate(rate);
       }
     }
-    else if (trackType == AUDIO_TRACK && output_audio) {
+    else if (track_type == AUDIO_TRACK && output_audio) {
       // Get the audio track from the parser
       const mkvparser::AudioTrack* const pAudioTrack =
-        static_cast<const mkvparser::AudioTrack*>(pTrack);
+        static_cast<const mkvparser::AudioTrack*>(parser_track);
       const long long channels =  pAudioTrack->GetChannels();
-      const double sampleRate = pAudioTrack->GetSamplingRate();
+      const double sample_rate = pAudioTrack->GetSamplingRate();
 
       // Add the audio track to the muxer
-      aud_track = segment.AddAudioTrack(static_cast<int>(sampleRate),
-                                        static_cast<int>(channels));
+      aud_track = muxer_segment.AddAudioTrack(static_cast<int>(sample_rate),
+                                              static_cast<int>(channels));
       if (!aud_track) {
         printf("\n Could not add audio track.\n");
         return -1;
@@ -237,7 +243,7 @@ int main(int argc, char* argv[]) {
 
       mkvmuxer::AudioTrack* audio =
         static_cast<mkvmuxer::AudioTrack*>(
-            segment.GetTrackByNumber(aud_track));
+            muxer_segment.GetTrackByNumber(aud_track));
       if (!audio) {
         printf("\n Could not get audio track.\n");
         return -1;
@@ -256,86 +262,86 @@ int main(int argc, char* argv[]) {
         }
       }
 
-      const long long bitDepth = pAudioTrack->GetBitDepth();
-      if (bitDepth > 0)
-        audio->bit_depth(bitDepth);
+      const long long bit_depth = pAudioTrack->GetBitDepth();
+      if (bit_depth > 0)
+        audio->bit_depth(bit_depth);
     }
   }
 
   // Set Cues element attributes
-  mkvmuxer::Cues* cues = segment.GetCues();
+  mkvmuxer::Cues* cues = muxer_segment.GetCues();
   cues->output_block_number(output_cues_block_number);
   if (cues_on_video_track) {
     if (vid_track)
-      segment.CuesTrack(vid_track);
+      muxer_segment.CuesTrack(vid_track);
   } else {
     if (aud_track)
-      segment.CuesTrack(aud_track);
+      muxer_segment.CuesTrack(aud_track);
   }
 
   // Write clusters
   unsigned char* data = NULL;
   int data_len = 0;
 
-  const mkvparser::Cluster* pCluster = pSegment->GetFirst();
+  const mkvparser::Cluster* cluster = parser_segment->GetFirst();
 
-  while ((pCluster != NULL) && !pCluster->EOS()) {
-    const mkvparser::BlockEntry* pBlockEntry = pCluster->GetFirst();
+  while ((cluster != NULL) && !cluster->EOS()) {
+    const mkvparser::BlockEntry* block_entry = cluster->GetFirst();
 
-    while ((pBlockEntry != NULL) && !pBlockEntry->EOS()) {
-      const mkvparser::Block* const pBlock  = pBlockEntry->GetBlock();
-      const long long trackNum = pBlock->GetTrackNumber();
-      const mkvparser::Track* const pTrack =
-        pTracks->GetTrackByNumber(static_cast<unsigned long>(trackNum));
-      const long long trackType = pTrack->GetType();
+    while ((block_entry != NULL) && !block_entry->EOS()) {
+      const mkvparser::Block* const block = block_entry->GetBlock();
+      const long long trackNum = block->GetTrackNumber();
+      const mkvparser::Track* const parser_track =
+        parser_tracks->GetTrackByNumber(static_cast<unsigned long>(trackNum));
+      const long long track_type = parser_track->GetType();
 
-      if ( (trackType == AUDIO_TRACK && output_audio) ||
-          (trackType == VIDEO_TRACK && output_video) ) {
-        const int frameCount = pBlock->GetFrameCount();
-        const long long time_ns = pBlock->GetTime(pCluster);
-        const bool is_key = pBlock->IsKey();
+      if ( (track_type == AUDIO_TRACK && output_audio) ||
+          (track_type == VIDEO_TRACK && output_video) ) {
+        const int frame_count = block->GetFrameCount();
+        const long long time_ns = block->GetTime(cluster);
+        const bool is_key = block->IsKey();
 
-        for (int i = 0; i < frameCount; ++i) {
-          const mkvparser::Block::Frame& theFrame = pBlock->GetFrame(i);
+        for (int i = 0; i < frame_count; ++i) {
+          const mkvparser::Block::Frame& frame = block->GetFrame(i);
 
-          if (theFrame.len > data_len) {
+          if (frame.len > data_len) {
             delete [] data;
-            data = new unsigned char[theFrame.len];
+            data = new unsigned char[frame.len];
             if (!data)
               return -1;
-            data_len = theFrame.len;
+            data_len = frame.len;
           }
 
-          if (theFrame.Read(&reader, data))
+          if (frame.Read(&reader, data))
             return -1;
 
           uint64 track_num = vid_track;
-          if (trackType == AUDIO_TRACK)
+          if (track_type == AUDIO_TRACK)
             track_num = aud_track;
 
-          if (!segment.AddFrame(data,
-            theFrame.len,
-            track_num,
-            time_ns,
-            is_key)) {
+          if (!muxer_segment.AddFrame(data,
+                                      frame.len,
+                                      track_num,
+                                      time_ns,
+                                      is_key)) {
               printf("\n Could not add frame.\n");
               return -1;
           }
         }
       }
 
-      pBlockEntry = pCluster->GetNext(pBlockEntry);
+      block_entry = cluster->GetNext(block_entry);
     }
 
-    pCluster = pSegment->GetNext(pCluster);
+    cluster = parser_segment->GetNext(cluster);
   }
 
-  segment.Finalize();
+  muxer_segment.Finalize();
 
   if (data)
     delete [] data;
 
-  delete pSegment;
+  delete parser_segment;
   return 0;
 }
 

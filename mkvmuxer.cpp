@@ -25,7 +25,7 @@ IMkvWriter::IMkvWriter() {
 IMkvWriter::~IMkvWriter() {
 }
 
-bool WriteEbmlHeader(IMkvWriter* pWriter) {
+bool WriteEbmlHeader(IMkvWriter* writer) {
   // Level 0
   uint64 size = EbmlElementSize(kMkvEBMLVersion, 1ULL, false);
   size += EbmlElementSize(kMkvEBMLReadVersion, 1ULL, false);
@@ -35,22 +35,22 @@ bool WriteEbmlHeader(IMkvWriter* pWriter) {
   size += EbmlElementSize(kMkvDocTypeVersion, 2ULL, false);
   size += EbmlElementSize(kMkvDocTypeReadVersion, 2ULL, false);
 
-  if (!WriteEbmlMasterElement(pWriter, kMkvEBML, size))
+  if (!WriteEbmlMasterElement(writer, kMkvEBML, size))
     return false;
 
-  if (!WriteEbmlElement(pWriter, kMkvEBMLVersion, 1ULL))
+  if (!WriteEbmlElement(writer, kMkvEBMLVersion, 1ULL))
     return false;
-  if (!WriteEbmlElement(pWriter, kMkvEBMLReadVersion, 1ULL))
+  if (!WriteEbmlElement(writer, kMkvEBMLReadVersion, 1ULL))
     return false;
-  if (!WriteEbmlElement(pWriter, kMkvEBMLMaxIDLength, 4ULL))
+  if (!WriteEbmlElement(writer, kMkvEBMLMaxIDLength, 4ULL))
     return false;
-  if (!WriteEbmlElement(pWriter, kMkvEBMLMaxSizeLength, 8ULL))
+  if (!WriteEbmlElement(writer, kMkvEBMLMaxSizeLength, 8ULL))
     return false;
-  if (!WriteEbmlElement(pWriter, kMkvDocType, "webm"))
+  if (!WriteEbmlElement(writer, kMkvDocType, "webm"))
     return false;
-  if (!WriteEbmlElement(pWriter, kMkvDocTypeVersion, 2ULL))
+  if (!WriteEbmlElement(writer, kMkvDocTypeVersion, 2ULL))
     return false;
-  if (!WriteEbmlElement(pWriter, kMkvDocTypeReadVersion, 2ULL))
+  if (!WriteEbmlElement(writer, kMkvDocTypeReadVersion, 2ULL))
     return false;
 
   return true;
@@ -267,8 +267,8 @@ bool VideoTrack::SetStereoMode(uint64 stereo_mode) {
   return true;
 }
 
-uint64 VideoTrack::Size() const {
-  const uint64 parent_size = Track::Size();
+uint64 VideoTrack::PayloadSize() const {
+  const uint64 parent_size = Track::PayloadSize();
 
   uint64 size = VideoPayloadSize();
   size += EbmlElementSize(kMkvVideo, size, true);
@@ -276,8 +276,8 @@ uint64 VideoTrack::Size() const {
   return parent_size + size;
 }
 
-uint64 VideoTrack::PayloadSize() const {
-  const uint64 parent_size = Track::PayloadSize();
+uint64 VideoTrack::Size() const {
+  const uint64 parent_size = Track::Size();
 
   uint64 size = VideoPayloadSize();
   size += EbmlElementSize(kMkvVideo, size, true);
@@ -353,8 +353,8 @@ AudioTrack::AudioTrack()
 AudioTrack::~AudioTrack() {
 }
 
-uint64 AudioTrack::Size() const {
-  const uint64 parent_size = Track::Size();
+uint64 AudioTrack::PayloadSize() const {
+  const uint64 parent_size = Track::PayloadSize();
 
   uint64 size = EbmlElementSize(kMkvSamplingFrequency,
                                 static_cast<float>(sample_rate_),
@@ -367,8 +367,8 @@ uint64 AudioTrack::Size() const {
   return parent_size + size;
 }
 
-uint64 AudioTrack::PayloadSize() const {
-  const uint64 parent_size = Track::PayloadSize();
+uint64 AudioTrack::Size() const {
+  const uint64 parent_size = Track::Size();
 
   uint64 size = EbmlElementSize(kMkvSamplingFrequency,
                                 static_cast<float>(sample_rate_),
@@ -443,13 +443,6 @@ Track::~Track() {
   }
 }
 
-uint64 Track::Size() const {
-  uint64 size = Track::PayloadSize();
-  size += EbmlElementSize(kMkvTrackEntry, size, true);
-
-  return size;
-}
-
 uint64 Track::PayloadSize() const {
   uint64 size = EbmlElementSize(kMkvTrackNumber, number_, false);
   size += EbmlElementSize(kMkvTrackUID, uid_, false);
@@ -465,6 +458,13 @@ uint64 Track::PayloadSize() const {
     size += EbmlElementSize(kMkvLanguage, language_, false);
   if (name_)
     size += EbmlElementSize(kMkvName, name_, false);
+
+  return size;
+}
+
+uint64 Track::Size() const {
+  uint64 size = Track::PayloadSize();
+  size += EbmlElementSize(kMkvTrackEntry, size, true);
 
   return size;
 }
@@ -624,63 +624,63 @@ uint64 Track::MakeUID() {
 }
 
 Tracks::Tracks()
-    : m_trackEntries(NULL),
-      m_trackEntriesSize(0) {
+    : track_entries_(NULL),
+      track_entries_size_(0) {
 }
 
 Tracks::~Tracks() {
-  if (m_trackEntries) {
-    for (unsigned int i=0; i<m_trackEntriesSize; ++i) {
-      Track* const pTrack = m_trackEntries[i];
-      delete pTrack;
+  if (track_entries_) {
+    for (unsigned int i=0; i<track_entries_size_; ++i) {
+      Track* const track = track_entries_[i];
+      delete track;
     }
-    delete [] m_trackEntries;
+    delete [] track_entries_;
   }
 }
 
 bool Tracks::AddTrack(Track* track) {
-  const unsigned int count = m_trackEntriesSize+1;
+  const unsigned int count = track_entries_size_+1;
 
   Track** track_entries = new (std::nothrow) Track*[count];
   if (!track_entries)
     return false;
 
-  for (unsigned int i=0; i<m_trackEntriesSize; ++i) {
-    track_entries[i] = m_trackEntries[i];
+  for (unsigned int i=0; i<track_entries_size_; ++i) {
+    track_entries[i] = track_entries_[i];
   }
 
-  delete [] m_trackEntries;
+  delete [] track_entries_;
 
   track->number(count);
 
-  m_trackEntries = track_entries;
-  m_trackEntries[m_trackEntriesSize] = track;
-  m_trackEntriesSize = count;
+  track_entries_ = track_entries;
+  track_entries_[track_entries_size_] = track;
+  track_entries_size_ = count;
   return true;
 }
 
-int Tracks::GetTracksCount() const {
-  return m_trackEntriesSize;
+const Track* Tracks::GetTrackByIndex(unsigned long index) const {
+  if (track_entries_ == NULL)
+    return NULL;
+
+  if (index >= track_entries_size_)
+    return NULL;
+
+  return track_entries_[index];
 }
 
-Track* Tracks::GetTrackByNumber(uint64 tn) {
+Track* Tracks::GetTrackByNumber(uint64 track_number) {
   const int count = GetTracksCount();
   for (int i=0; i<count; ++i) {
-    if (m_trackEntries[i]->number() == tn)
-      return m_trackEntries[i];
+    if (track_entries_[i]->number() == track_number)
+      return track_entries_[i];
   }
 
   return NULL;
 }
 
-const Track* Tracks::GetTrackByIndex(unsigned long index) const {
-  if (m_trackEntries == NULL)
-    return NULL;
-
-  if (index >= m_trackEntriesSize)
-    return NULL;
-
-  return m_trackEntries[index];
+int Tracks::GetTracksCount() const {
+  return track_entries_size_;
 }
 
 bool Tracks::TrackIsAudio(uint64 track_number) {
@@ -691,7 +691,6 @@ bool Tracks::TrackIsAudio(uint64 track_number) {
 
   return false;
 }
-
 
 bool Tracks::TrackIsVideo(uint64 track_number) {
   Track* track = GetTrackByNumber(track_number);
@@ -708,9 +707,9 @@ bool Tracks::Write(IMkvWriter* writer) const {
   uint64 size = 0;
   const int count = GetTracksCount();
   for (int i=0; i<count; ++i) {
-    const Track* pTrack = GetTrackByIndex(i);
-    assert(pTrack);
-    size += pTrack->Size();
+    const Track* track = GetTrackByIndex(i);
+    assert(track);
+    size += track->Size();
   }
 
   if (!WriteEbmlMasterElement(writer, kMkvTracks, size))
@@ -721,8 +720,8 @@ bool Tracks::Write(IMkvWriter* writer) const {
     return false;
 
   for (int i=0; i<count; ++i) {
-    const Track* pTrack = GetTrackByIndex(i);
-    if (!pTrack->Write(writer))
+    const Track* track = GetTrackByIndex(i);
+    if (!track->Write(writer))
       return false;
   }
 
@@ -1183,7 +1182,7 @@ uint64 Segment::AddVideoTrack(int width, int height) {
   vid_track->width(width);
   vid_track->height(height);
 
-  m_tracks_.AddTrack(vid_track);
+  tracks_.AddTrack(vid_track);
   has_video_ = true;
 
   return vid_track->number();
@@ -1199,7 +1198,7 @@ uint64 Segment::AddAudioTrack(int sample_rate, int channels) {
   aud_track->sample_rate(sample_rate);
   aud_track->channels(channels);
 
-  m_tracks_.AddTrack(aud_track);
+  tracks_.AddTrack(aud_track);
 
   return aud_track->number();
 }
@@ -1221,21 +1220,21 @@ bool Segment::AddFrame(uint8* frame,
 
     if (output_cues_ && cues_track_ == 0) {
       // Check for a video track
-      for (int i=0; i<m_tracks_.GetTracksCount(); ++i) {
-        const Track* pTrack = m_tracks_.GetTrackByIndex(i);
-        assert(pTrack);
+      for (int i=0; i<tracks_.GetTracksCount(); ++i) {
+        const Track* track = tracks_.GetTrackByIndex(i);
+        assert(track);
 
-        if (m_tracks_.TrackIsVideo(pTrack->number())) {
-          cues_track_ = pTrack->number();
+        if (tracks_.TrackIsVideo(track->number())) {
+          cues_track_ = track->number();
           break;
         }
       }
 
       // Set first track found
       if (cues_track_ == 0) {
-        const Track* pTrack = m_tracks_.GetTrackByIndex(0);
-        assert(pTrack);
-        cues_track_ = pTrack->number();
+        const Track* track = tracks_.GetTrackByIndex(0);
+        assert(track);
+        cues_track_ = track->number();
       }
     }
   }
@@ -1243,7 +1242,7 @@ bool Segment::AddFrame(uint8* frame,
   // If the segment has a video track hold onto audio frames to make sure the
   // audio that is associated with the start time of a video key-frame is
   // muxed into the same cluster.
-  if (has_video_ && m_tracks_.TrackIsAudio(track_number)) {
+  if (has_video_ && tracks_.TrackIsAudio(track_number)) {
     Frame* new_frame = new Frame();
     if (!new_frame->Init(frame, length))
       return false;
@@ -1258,7 +1257,7 @@ bool Segment::AddFrame(uint8* frame,
   }
 
   // Check to see if the muxer needs to start a new cluster.
-  if (is_key && m_tracks_.TrackIsVideo(track_number)) {
+  if (is_key && tracks_.TrackIsVideo(track_number)) {
     new_cluster_ = true;
   } else if (cluster_list_size_ > 0 ) {
     Cluster* cluster = cluster_list_[cluster_list_size_-1];
@@ -1372,20 +1371,24 @@ void Segment::OutputCues(bool output_cues) {
   output_cues_ = output_cues;
 }
 
-bool Segment::CuesTrack(uint64 track) {
-  Track* pTrack = GetTrackByNumber(track);
-  if (!pTrack)
+bool Segment::CuesTrack(uint64 track_number) {
+  Track* track = GetTrackByNumber(track_number);
+  if (!track)
     return false;
 
-  cues_track_ = track;
+  cues_track_ = track_number;
   return true;
 }
 
 Track* Segment::GetTrackByNumber(uint64 track_number) {
-  return m_tracks_.GetTrackByNumber(track_number);
+  return tracks_.GetTrackByNumber(track_number);
 }
 
 bool Segment::WriteSegmentHeader() {
+  // TODO: Support more than one segment.
+  if (!WriteEbmlHeader(writer_))
+    return false;
+
   // Write "unknown" (-1) as segment size value. If mode is kFile, Segment
   // will write over duration when the file is finalized.
   if (SerializeInt(writer_, kMkvSegment, 4))
@@ -1418,7 +1421,7 @@ bool Segment::WriteSegmentHeader() {
 
   if (!seek_head_.AddSeekEntry(kMkvTracks, writer_->Position() - payload_pos_))
     return false;
-  if (!m_tracks_.Write(writer_))
+  if (!tracks_.Write(writer_))
     return false;
   header_written_ = true;
 

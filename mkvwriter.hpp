@@ -15,27 +15,32 @@
 namespace mkvmuxer
 {
 
+// Default implementation of the IMkvWriter interface on Windows.
 class MkvWriter : public IMkvWriter
 {
-public:
-    MkvWriter();
-    virtual ~MkvWriter();
+ public:
+  MkvWriter();
+  virtual ~MkvWriter();
 
-    // IMkvWriter Implementation
-    virtual int Write(const void* buffer, unsigned long length);
-    virtual long long Position() const;
-    virtual int Position(long long position);
+  // IMkvWriter interface
+  virtual long long Position() const;
+  virtual int Position(long long position);
+  virtual bool Seekable() const;
+  virtual int Write(const void* buffer, unsigned long length);
 
-    virtual bool Seekable() const;
+  // Creates and opens a file for writing. |filename| is the name of the file
+  // to open. This function will overwrite the contents of |filename|. Returns
+  // true on success.
+  bool Open(const char* filename);
 
-    bool Open(const char* filename);
-    void Close();
-    
+  // Closes an opened file.
+  void Close();
 
-private:
-    FILE* file_;
+ private:
+  // File handle to output file.
+  FILE* file_;
 
-    DISALLOW_COPY_AND_ASSIGN(MkvWriter);
+  LIBWEBM_DISALLOW_COPY_AND_ASSIGN(MkvWriter);
 };
 
 }  //end namespace mkvmuxer

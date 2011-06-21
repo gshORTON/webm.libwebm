@@ -10,7 +10,7 @@
 #include <cassert>
 #include <new>
 #ifdef WIN32
-#include <share.h>
+#include <share.h> // for _SH_DENYWR
 #endif
 
 namespace mkvmuxer {

@@ -11,17 +11,25 @@
 
 #include "mkvmuxertypes.hpp"
 
+// For a description of the WebM elements see
+// http://www.webmproject.org/code/specs/container/.
+
 namespace mkvmuxer {
 
 // Interface used by the mkvmuxer to write out the Mkv data.
 class IMkvWriter {
  public:
+  // Writes out |len| bytes of |buf|. Returns 0 on success.
   virtual int Write(const void* buf, unsigned long len) = 0;
+
+  // Returns the offset of the output position from the beginning of the
+  // output.
   virtual int64 Position() const = 0;
 
   // Set the current File position. Returns 0 on success.
   virtual int Position(int64 position) = 0;
   
+  // Returns true if the writer is seekable.
   virtual bool Seekable() const = 0;
 
  protected:
@@ -29,16 +37,16 @@ class IMkvWriter {
   virtual ~IMkvWriter();
 
  private:
-  DISALLOW_COPY_AND_ASSIGN(IMkvWriter);
+  LIBWEBM_DISALLOW_COPY_AND_ASSIGN(IMkvWriter);
 };
 
 // Writes out the EBML header for a WebM file. This function must be called
-// first before any other libwebm writing functions are called.
-bool WriteEbmlHeader(IMkvWriter* pWriter);
+// before any other libwebm writing functions are called.
+bool WriteEbmlHeader(IMkvWriter* writer);
 
-
+// Class to hold data the will be written to a block.
 class Frame {
-public:
+ public:
   Frame();
   ~Frame();
 
@@ -54,22 +62,33 @@ public:
   bool is_key() const {return is_key_;}
   void is_key(bool key) {is_key_ = key;}
 
-private:
+ private:
+  // Pointer to the data. Owned by this class.
   uint8* frame_;
+
+  // Length of the data.
   uint64 length_;
+
+  // Mkv track number the data is associated with.
   uint64 track_number_;
+
+  // Timestamp of the data in nanoseconds.
   uint64 timestamp_;
+
+  // Flag telling if the data should set the key flag of a block.
   bool is_key_;
 };
 
+// Class to hold one cue point in a Cues element.
 class CuePoint {
-public:
+ public:
   CuePoint();
   ~CuePoint();
 
   // Returns the size in bytes for the entire CuePoint element.
   uint64 Size() const;
 
+  // Output the CuePoint element to the writer. Returns true on success.
   bool Write(IMkvWriter* writer) const;
 
   uint64 time() const {return time_;}
@@ -86,25 +105,32 @@ public:
     output_block_number_ = output_block_number;
   }
 
-private:
+ private:
   // Returns the size in bytes for the payload of the CuePoint element.
   uint64 PayloadSize() const;
 
   // Absolute timecode according to the segment time base.
   uint64 time_;
+
+  // The Track element associated with the CuePoint.
   uint64 track_;
+
+  // The position of the Cluster containing the Block.
   uint64 cluster_pos_;
+
+  // Number of the Block within the Cluster, starting from 1.
   uint64 block_number_;
 
   // If true the muxer will write out the block number for the cue if the
-  // block number is different than the defualt of 1. Default is set to true. 
+  // block number is different than the default of 1. Default is set to true.
   bool output_block_number_;
 
-  DISALLOW_COPY_AND_ASSIGN(CuePoint);
+  LIBWEBM_DISALLOW_COPY_AND_ASSIGN(CuePoint);
 };
 
+// Cues element.
 class Cues {
-public:
+ public:
   Cues();
   ~Cues();
 
@@ -114,6 +140,7 @@ public:
   // Returns the track by index. Returns NULL if there is no track match.
   const CuePoint* GetCueByIndex(int index) const;
 
+  // Output the Cues element to the writer. Returns true on success.
   bool Write(IMkvWriter* writer) const;
 
   int cue_entries_size() const {return cue_entries_size_;}
@@ -122,56 +149,60 @@ public:
     output_block_number_ = output_block_number;
   }
 
-private:
+ private:
+  // Number of allocated elements in |cue_entries_|.
   int cue_entries_capacity_;
+
+  // Number of CuePoints in |cue_entries_|.
   int cue_entries_size_;
+
+  // CuePoint list.
   CuePoint** cue_entries_;
 
   // If true the muxer will write out the block number for the cue if the
-  // block number is different than the defualt of 1. Default is set to true. 
+  // block number is different than the default of 1. Default is set to true.
   bool output_block_number_;
 
-  DISALLOW_COPY_AND_ASSIGN(Cues);
+  LIBWEBM_DISALLOW_COPY_AND_ASSIGN(Cues);
 };
 
+// Track element.
 class Track {
-public:
+ public:
   Track();
   virtual ~Track();
 
-  virtual uint64 Size() const;
+  // Returns the size in bytes for the payload of the Track element.
   virtual uint64 PayloadSize() const;
 
+  // Returns the size in bytes of the Track element.
+  virtual uint64 Size() const;
+
+  // Output the Track element to the writer. Returns true on success.
   virtual bool Write(IMkvWriter* writer) const;
 
+  // Sets the CodecPrivate element of the Track element. Copies |length|
+  // bytes from |codec_private| to |codec_private_|. Returns true on success.
   bool SetCodecPrivate(const uint8* codec_private, uint64 length);
 
   const char* codec_id() const {return codec_id_;}
   void codec_id(const char* codec_id);
-
   const uint8* codec_private() const {return codec_private_;}
-  uint64 codec_private_length() const {return codec_private_length_;}
-  
   const char* language() const {return language_;}
   void language(const char* language);
   const char* name() const {return name_;}
   void name(const char* name);
-
   uint64 number() const {return number_;}
   void number(uint64 number) {number_ = number;}
-  
   uint64 type() const {return type_;}
   void type(uint64 type) {type_ = type;}
-
   uint64 uid() const {return uid_;}
-  //void uid(uint64 uid) {uid_ = uid;}
 
-private:
+  uint64 codec_private_length() const {return codec_private_length_;}
+
+ private:
   // Returns a random number to be used for the Track UID.
   static uint64 MakeUID();
-
-  // Flag telling if the rand call was seeded.
-  static bool is_seeded_;
 
   // Track element names
   char* codec_id_;
@@ -182,101 +213,117 @@ private:
   uint64 type_;
   const uint64 uid_;
 
+  // Size of the CodecPrivate data in bytes.
   uint64 codec_private_length_;
 
-  DISALLOW_COPY_AND_ASSIGN(Track);
+  // Flag telling if the rand call was seeded.
+  static bool is_seeded_;
+
+  LIBWEBM_DISALLOW_COPY_AND_ASSIGN(Track);
 };
 
-
+// Track that has video specific elements.
 class VideoTrack : public Track {
-public:
+ public:
   VideoTrack();
   virtual ~VideoTrack();
+
+  // Returns the size in bytes for the payload of the Track element plus the
+  // video specific elements.
+  virtual uint64 PayloadSize() const;
+
+  // Returns the size in bytes of the Track element plus the video specific
+  // elements.
+  virtual uint64 Size() const;
+
+  // Output the VideoTrack element to the writer. Returns true on success.
+  virtual bool Write(IMkvWriter* writer) const;
 
   // Sets the video's stereo mode. Returns true on success.
   bool SetStereoMode(uint64 stereo_mode);
 
-  virtual uint64 Size() const;
-  virtual uint64 PayloadSize() const;
-  virtual bool Write(IMkvWriter* writer) const;
-
+  uint64 display_height() const {return display_height_;}
+  void display_height(uint64 height) {display_height_ = height;}
+  uint64 display_width() const {return display_width_;}
+  void display_width(uint64 width) {display_width_ = width;}
+  double frame_rate() const {return frame_rate_;}
+  void frame_rate(double frame_rate) {frame_rate_ = frame_rate;}
+  uint64 height() const {return height_;}
+  void height(uint64 height) {height_ = height;}
+  void stereo_mode(uint64 stereo_mode) {stereo_mode_ = stereo_mode;}
   uint64 width() const {return width_;}
   void width(uint64 width) {width_ = width;}
 
-  uint64 height() const {return height_;}
-  void height(uint64 height) {height_ = height;}
-
-  uint64 display_width() const {return display_width_;}
-  void display_width(uint64 width) {display_width_ = width;}
-
-  uint64 display_height() const {return display_height_;}
-  void display_height(uint64 height) {display_height_ = height;}
-
-  double frame_rate() const {return frame_rate_;}
-  void frame_rate(double frame_rate) {frame_rate_ = frame_rate;}
-
-  //uint64 stereo_mode() const {return stereo_mode_;}
-  void stereo_mode(uint64 stereo_mode) {stereo_mode_ = stereo_mode;}
-
-private:
+ private:
   // Returns the size in bytes of the Video element.
   uint64 VideoPayloadSize() const;
 
-  uint64 width_;
-  uint64 height_;
-  uint64 display_width_;
+  // Video track element names.
   uint64 display_height_;
-
+  uint64 display_width_;
   double frame_rate_;
+  uint64 height_;
   uint64 stereo_mode_;
+  uint64 width_;
 
-  DISALLOW_COPY_AND_ASSIGN(VideoTrack);
+  LIBWEBM_DISALLOW_COPY_AND_ASSIGN(VideoTrack);
 };
 
+// Track that has audio specific elements.
 class AudioTrack : public Track {
-public:
+ public:
   AudioTrack();
   virtual ~AudioTrack();
 
-  virtual uint64 Size() const;
+  // Returns the size in bytes for the payload of the Track element plus the
+  // audio specific elements.
   virtual uint64 PayloadSize() const;
+
+  // Returns the size in bytes of the Track element plus the audio specific
+  // elements.
+  virtual uint64 Size() const;
+
+  // Output the AudioTrack element to the writer. Returns true on success.
   virtual bool Write(IMkvWriter* writer) const;
 
   uint64 bit_depth() const {return bit_depth_;}
   void bit_depth(uint64 bit_depth) {bit_depth_ = bit_depth;}
-
   uint64 channels() const {return channels_;}
   void channels(uint64 channels) {channels_ = channels;}
-
   double sample_rate() const {return sample_rate_;}
   void sample_rate(double sample_rate) {sample_rate_ = sample_rate;}
 
-private:
+ private:
+  // Audio track element names.
   uint64 bit_depth_;
   uint64 channels_;
   double sample_rate_;
 
-  DISALLOW_COPY_AND_ASSIGN(AudioTrack);
+  LIBWEBM_DISALLOW_COPY_AND_ASSIGN(AudioTrack);
 };
 
+// Tracks element
 class Tracks {
-public:
-  Tracks();
-  ~Tracks();
-
+ public:
   static const uint64 kVideo = 0x1;
   static const uint64 kAudio = 0x2;
 
+  Tracks();
+  ~Tracks();
+
+  // Adds a Track element to the Tracks object. |track| will be owned and
+  // deleted by the Tracks object. Returns true on success.
   bool AddTrack(Track* track);
-
-  int GetTracksCount() const;
-
-  // Search the Tracks and return the track that matches |tn|. Returns NULL
-  // if there is no track match.
-  Track* GetTrackByNumber(uint64 tn);
 
   // Returns the track by index. Returns NULL if there is no track match.
   const Track* GetTrackByIndex(unsigned long idx) const;
+
+  // Search the Tracks and return the track that matches |tn|. Returns NULL
+  // if there is no track match.
+  Track* GetTrackByNumber(uint64 track_number);
+
+  // Returns the number of Track elements added.
+  int GetTracksCount() const;
 
   // Returns true if the track number is an audio track.
   bool TrackIsAudio(uint64 track_number);
@@ -284,28 +331,35 @@ public:
   // Returns true if the track number is a video track.
   bool TrackIsVideo(uint64 track_number);
 
+  // Output the Tracks element to the writer. Returns true on success.
   bool Write(IMkvWriter* writer) const;
 
-private:
-  Track** m_trackEntries;
-  unsigned int m_trackEntriesSize;
+ private:
+  // Track element list.
+  Track** track_entries_;
 
-  DISALLOW_COPY_AND_ASSIGN(Tracks);
+  // Number of Track elements added.
+  unsigned int track_entries_size_;
+
+  LIBWEBM_DISALLOW_COPY_AND_ASSIGN(Tracks);
 };
 
+// Cluster element
 class Cluster {
-public:
+ public:
+  // |timecode| is the absolute timecode of the cluster.
   Cluster(uint64 timecode, IMkvWriter* writer);
   ~Cluster();
 
-  // Adds a frame to be output in the file. Returns true on success.
+  // Adds a frame to be output in the file. The frame is written out through
+  // |writer_| if successful. Returns true on success.
   // Inputs:
   //   frame: Pointer to the data
   //   length: Length of the data
   //   track_number: Track to add the data to. Value returned by Add track
   //                 functions.
   //   timestamp:    Timecode of the frame relative to the cluster timecode.
-  //   is_key:       Flag telling whter or not this frame is a key frame.
+  //   is_key:       Flag telling wheter or not this frame is a key frame.
   bool AddFrame(const uint8* frame,
                 uint64 length,
                 uint64 track_number,
@@ -320,22 +374,15 @@ public:
   bool Finalize();
 
   int blocks_added() const {return blocks_added_;}
-
+  uint64 payload_size() const {return payload_size_;}
   uint64 timecode() const {return timecode_;}
 
-  uint64 payload_size() const {return payload_size_;}
-
-private:
+ private:
   // Outputs the Cluster header to |writer_|. Returns true on success.
   bool WriteClusterHeader();
 
   // Number of blocks added to the cluster.
   int blocks_added_;
-
-  // The timecode of the cluster.
-  const uint64 timecode_;
-
-  IMkvWriter* writer_;
 
   // Flag telling if the cluster has been closed.
   bool finalized_;
@@ -346,16 +393,31 @@ private:
   // The size of the cluster elements in bytes.
   uint64 payload_size_;
 
-  // The file position of the size.
+  // The file position of the cluster's size element.
   int64 size_position_;
 
-  DISALLOW_COPY_AND_ASSIGN(Cluster);
+  // The absolute timecode of the cluster.
+  const uint64 timecode_;
+
+  // Pointer to the writer object. Not owned by this class.
+  IMkvWriter* writer_;
+
+  LIBWEBM_DISALLOW_COPY_AND_ASSIGN(Cluster);
 };
 
+// SeekHead element
 class SeekHead {
-public:
+ public:
   SeekHead();
   ~SeekHead();
+
+  // TODO: Change this to reserve a certain size. Then check how big the seek
+  // entry to be added is as not every seek entry will be the maximum size it
+  // could be.
+  // Adds a seek entry to be written out when the element is finalized. |id|
+  // must be the coded mkv element id. |pos| is the file position of the
+  // element. Returns true on success.
+  bool AddSeekEntry(unsigned long id, uint64 pos);
 
   // Writes out SeekHead and SeekEntry elements. Returns true on success.
   bool Finalize(IMkvWriter* writer) const;
@@ -364,71 +426,70 @@ public:
   // a SeekHead element later. Returns true on success.
   bool Write(IMkvWriter* writer);
 
-  // Adds a seek entry to be written out when the element is finalized. |id|
-  // must be the coded mkv element id. |pos| is the file position of the
-  // element. Returns true on success.
-  bool AddSeekEntry(unsigned long id, uint64 pos);
+ private:
+   // We are going to put a cap on the number of Seek Entries.
+  const static int kSeekEntryCount = 4;
 
-private:
   // Returns the maximum size in bytes of one seek entry.
   uint64 MaxEntrySize() const;
 
-  // We are going to put a cap on the number of Seek Entries.
-  const static int kSeekEntryCount = 4;
-
+  // Seek entry id element list.
   unsigned long seek_entry_id_[kSeekEntryCount];
+
+  // Seek entry pos element list.
   uint64 seek_entry_pos_[kSeekEntryCount];
 
-  // The file position of SeekHead.
+  // The file position of SeekHead element.
   int64 start_pos_;
 
-  DISALLOW_COPY_AND_ASSIGN(SeekHead);
+  LIBWEBM_DISALLOW_COPY_AND_ASSIGN(SeekHead);
 };
 
+// Segment Information element
 class SegmentInfo {
-public:
+ public:
   SegmentInfo();
   ~SegmentInfo();
-
-  // Sets |muxing_app_| and |writing_app_|.
-  bool Init();
 
   // Will update the duration if |duration_| is > 0.0. Returns true on success.
   bool Finalize(IMkvWriter* writer) const;
 
+  // Sets |muxing_app_| and |writing_app_|.
+  bool Init();
+
+  // Output the Segment Information element to the writer. Returns true on
+  // success.
   bool Write(IMkvWriter* writer);
 
-  uint64 timecode_scale() const {return timecode_scale_;}
-  void timecode_scale(uint64 scale) {timecode_scale_ = scale;}
   double duration() const {return duration_;}
   void duration(double duration) {duration_ = duration;}
-
   const char* muxing_app() const {return muxing_app_;}
+  uint64 timecode_scale() const {return timecode_scale_;}
+  void timecode_scale(uint64 scale) {timecode_scale_ = scale;}
   const char* writing_app() const {return writing_app_;}
   void writing_app(const char* app);
 
-private:
-  // For a description of the WebM elements see
-  // http://www.webmproject.org/code/specs/container/.
-
-  uint64 timecode_scale_;
-  // Initially set to -1 to signfy that a duration has not been set and should
+ private:
+  // Segment Information element names.
+  // Initially set to -1 to signify that a duration has not been set and should
   // not be written out.
   double duration_;
   // Set to libwebm-%d.%d.%d.%d, major, minor, build, revision.
   char* muxing_app_;
   // Initially set to libwebm-%d.%d.%d.%d, major, minor, build, revision.
   char* writing_app_;
+  uint64 timecode_scale_;
 
-  // The file position of the duration.
+  // The file position of the duration element.
   int64 duration_pos_;
 
-  DISALLOW_COPY_AND_ASSIGN(SegmentInfo);
+  LIBWEBM_DISALLOW_COPY_AND_ASSIGN(SegmentInfo);
 };
 
-// This class represents the main segment in a WebM file.
+// This class represents the main segment in a WebM file. Currently only
+// supports one Segment element.
 class Segment {
-public:
+ public:
   enum Mode {
     kLive = 0x1,
     kFile = 0x2
@@ -436,10 +497,6 @@ public:
 
   explicit Segment(IMkvWriter* writer);
   virtual ~Segment();
-
-  // Adds a video track to the segment. Returns the number of the track on
-  // success, 0 on error.
-  uint64 AddVideoTrack(int width, int height);
 
   // Adds an audio track to the segment. Returns the number of the track on
   // success, 0 on error.
@@ -459,31 +516,34 @@ public:
                 uint64 timestamp,
                 bool is_key);
 
-  // Toggles whether to output a cues element.
-  void OutputCues(bool output_cues);
+  // Adds a video track to the segment. Returns the number of the track on
+  // success, 0 on error.
+  uint64 AddVideoTrack(int width, int height);
 
   // Sets which track to use for the Cues element. Must have added the track
-  // before calling this function. Returns true on success. |track| is
+  // before calling this function. Returns true on success. |track_number| is
   // returned by the Add track functions.
-  bool CuesTrack(uint64 track);
+  bool CuesTrack(uint64 track_number);
 
+  // Writes out any frames that have not been written out. Finalizes the last
+  // cluster. May update the size and duration of the segment. May output the
+  // Cues element. May finalize the SeekHead element. Returns true on success.
+  bool Finalize();
+
+  // Returns the Cues object.
   Cues* GetCues() {return &cues_;}
+
+  // Returns the Segment Information object.
   SegmentInfo* GetSegmentInfo() {return &segment_info_;}
 
   // Search the Tracks and return the track that matches |track_number|.
   // Returns NULL if there is no track match. 
   Track* GetTrackByNumber(uint64 track_number);
 
-  bool WriteSegmentHeader();
+  // Toggles whether to output a cues element.
+  void OutputCues(bool output_cues);
 
-  // TODO: Change this!!!
-  bool Finalize();
-
-  const SegmentInfo* segment_info() const {return &segment_info_;}
-
-  Mode mode() const {return mode_;}
-  void mode(Mode mode) {mode_ = mode;}
-
+  uint64 cues_track() const {return cues_track_;}
   uint64 max_cluster_duration() const {return max_cluster_duration_;}
   void max_cluster_duration(uint64 max_cluster_duration) {
     max_cluster_duration_ = max_cluster_duration;
@@ -492,11 +552,12 @@ public:
   void max_cluster_size(uint64 max_cluster_size) {
     max_cluster_size_ = max_cluster_size;
   }
-
+  Mode mode() const {return mode_;}
+  void mode(Mode mode) {mode_ = mode;}
   bool output_cues() const {return output_cues_;}
-  uint64 cues_track() const {return cues_track_;}
+  const SegmentInfo* segment_info() const {return &segment_info_;}
 
-private:
+ private:
   // Adds a cue point to the Cues element. |timestamp| is the time in
   // nanoseconds of the cue's time. Returns true on success.
   bool AddCuePoint(uint64 timestamp);
@@ -513,26 +574,38 @@ private:
   // queued.
   bool WriteFramesLessThan(uint64 timestamp);
 
+  // Outputs the segment header, Segment Information element, SeekHead element,
+  // and Tracks element to |writer_|.
+  bool WriteSegmentHeader();
+
   // WebM elements
   Cues cues_;
-  SegmentInfo segment_info_;
   SeekHead seek_head_;
-  Tracks m_tracks_;
+  SegmentInfo segment_info_;
+  Tracks tracks_;
 
   // List of clusters.
   Cluster** cluster_list_;
+
+  // Number of cluster pointers allocated in the cluster list.
   int cluster_list_capacity_;
+
+  // Number of clusters in the cluster list.
   int cluster_list_size_;
 
   // Track number that is associated with the cues element for this segment.
   uint64 cues_track_;
 
-  // List of stored audio frames. These varibles are used to store frames so
+  // List of stored audio frames. These variables are used to store frames so
   // the muxer can follow the guideline "Audio blocks that contain the video
   // key frame's timecode should be in the same cluster as the video key frame
   // block."
   Frame** frames_;
+
+  // Number of frame pointers allocated in the frame list.
   int frames_capacity_;
+
+  // Number of frames in the frame list.
   int frames_size_;
 
   // Flag telling if a video track has been added to the segment.
@@ -545,12 +618,12 @@ private:
   uint64 last_timestamp_;
 
   // Maximum time in nanoseconds for a cluster duration. This variable is a
-  // guideline and some clusters may have a longer duration. Defualt is 0
+  // guideline and some clusters may have a longer duration. Default is 0
   // which signifies that the muxer will decide.
   uint64 max_cluster_duration_;
 
   // Maximum size in bytes for a cluster. This variable is a guideline and
-  // some clusters may have a larger size. Defualt is 0 which signifies that
+  // some clusters may have a larger size. Default is 0 which signifies that
   // the muxer will decide the size.
   uint64 max_cluster_size_;
 
@@ -575,9 +648,10 @@ private:
   // The file position of the element's size.
   int64 size_position_;
 
+  // Pointer to the writer object. Not owned by this class.
   IMkvWriter* writer_;
 
-  DISALLOW_COPY_AND_ASSIGN(Segment);
+  LIBWEBM_DISALLOW_COPY_AND_ASSIGN(Segment);
 };
 
 }  //end namespace mkvmuxer
