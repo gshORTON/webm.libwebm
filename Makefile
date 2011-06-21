@@ -1,20 +1,46 @@
-LIB = libmkvparser.a
-OBJECTS = mkvparser.o mkvreader.o sample.o
-EXE = sample 
-CFLAGS = -W -Wall -g 
+CXX      := g++
+CXXFLAGS := -W -Wall -g
+LIBS     := libmkvparser.a libmkvmuxer.a
+PARSEOBJ := mkvparser.o mkvreader.o
+MUXEROBJ := mkvmuxer.o mkvmuxerutil.o mkvwriter.o
+OBJECTS1 := $(PARSEOBJ) sample.o
+OBJECTS2 := $(PARSEOBJ) $(MUXEROBJ) sample_muxer/sample_muxer.o
+EXES     := samplemuxer sample
 
-$(EXE): $(OBJECTS) 
-	$(AR) rcs $(LIB) mkvparser.o mkvreader.o
-	$(CXX) $(OBJECTS)  -L./ -lmkvparser -o $(EXE)
+all: $(EXES)
+
+sample: $(OBJECTS1) libmkvparser.a
+	$(CXX) $(OBJECTS1) -L./ -lmkvparser -o sample
+
+samplemuxer: $(OBJECTS2) $(LIBS)
+	$(CXX) $(OBJECTS2) -L./ -lmkvparser -l mkvmuxer -o samplemuxer
+
+libmkvparser.a: $(PARSEOBJ)
+	$(AR) rcs libmkvparser.a $(PARSEOBJ)
+
+libmkvmuxer.a: $(MUXEROBJ)
+	$(AR) rcs libmkvmuxer.a $(MUXEROBJ)
+
+mkvmuxer.o: mkvmuxer.cpp
+	$(CXX) -c $(CXXFLAGS) mkvmuxer.cpp -o mkvmuxer.o
+
+mkvmuxerutil.o: mkvmuxerutil.cpp
+	$(CXX) -c $(CXXFLAGS) mkvmuxerutil.cpp -o mkvmuxerutil.o
+
+mkvwriter.o: mkvwriter.cpp
+	$(CXX) -c $(CXXFLAGS) mkvwriter.cpp -o mkvwriter.o
 
 mkvparser.o: mkvparser.cpp
-	$(CXX) -c $(CFLAGS) mkvparser.cpp -o mkvparser.o
+	$(CXX) -c $(CXXFLAGS) mkvparser.cpp -o mkvparser.o
 
 mkvreader.o: mkvreader.cpp
-	$(CXX) -c $(CFLAGS) mkvreader.cpp -o mkvreader.o
+	$(CXX) -c $(CXXFLAGS) mkvreader.cpp -o mkvreader.o
 
 sample.o: sample.cpp
-	$(CXX) -c $(CFLAGS) sample.cpp  -o sample.o
+	$(CXX) -c $(CXXFLAGS) sample.cpp -o sample.o
+
+sample_muxer/sample_muxer.o: sample_muxer/sample_muxer.cpp
+	$(CXX) -c $(CXXFLAGS) -I. sample_muxer/sample_muxer.cpp  -o sample_muxer/sample_muxer.o
 
 clean:
-	rm -rf $(OBJECTS) $(LIB) $(EXE) Makefile.bak
+	rm -rf $(OBJECTS2) sample.o $(LIBS) $(EXES) Makefile.bak
