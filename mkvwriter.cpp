@@ -61,7 +61,9 @@ void MkvWriter::Close() {
 }
 
 long long MkvWriter::Position() const {
-  assert(file_);
+  if (!file_)
+    return 0;
+
 #ifdef WIN32
     return _ftelli64(file_);
 #else

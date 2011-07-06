@@ -8,6 +8,7 @@
 
 #include "mkvmuxer.hpp"
 #include "mkvmuxerutil.hpp"
+#include "mkvwriter.hpp"
 #include "webmids.hpp"
 
 #include <stdio.h>
@@ -801,6 +802,13 @@ bool Cluster::Finalize() {
   return true;
 }
 
+uint64 Cluster::Size() {
+  const uint64 payload_size = payload_size_;
+  uint64 element_size =
+    EbmlElementSize(kMkvCluster, 0xFFFFFFFFFFFFFFFFULL, true) + payload_size;
+  return element_size;
+}
+
 bool Cluster::WriteClusterHeader() {
   assert(!finalized_);
 
@@ -1076,7 +1084,14 @@ void SegmentInfo::writing_app(const char* app) {
 }
 
 Segment::Segment(IMkvWriter* writer)
-    : cluster_list_(NULL),
+    : chunk_count_(0),
+      chunk_name_(NULL),
+      chunk_writer_cluster_(NULL),
+      chunk_writer_cues_(NULL),
+      chunk_writer_header_(NULL),
+      chunking_(false),
+      chunking_base_name_(NULL),
+      cluster_list_(NULL),
       cluster_list_capacity_(0),
       cluster_list_size_(0),
       cues_track_(0),
@@ -1094,8 +1109,10 @@ Segment::Segment(IMkvWriter* writer)
       output_cues_(true),
       payload_pos_(0),
       size_position_(0),
-      writer_(writer) {
-  assert(writer_);
+      writer_cluster_(writer),
+      writer_cues_(writer),
+      writer_header_(writer) {
+  assert(writer_cluster_);
 
   // TODO: Create an Init function for Segment.
   segment_info_.Init();
@@ -1117,6 +1134,21 @@ Segment::~Segment() {
     }
     delete [] frames_;
   }
+
+  if (chunk_name_)
+    delete [] chunk_name_;
+
+  if (chunking_base_name_)
+    delete [] chunking_base_name_;
+
+  if (chunk_writer_cluster_)
+    delete chunk_writer_cluster_;
+
+  if (chunk_writer_cues_)
+    delete chunk_writer_cues_;
+
+  if (chunk_writer_header_)
+    delete chunk_writer_header_;
 }
 
 bool Segment::Finalize() {
@@ -1133,39 +1165,63 @@ bool Segment::Finalize() {
         return false;
     }
 
+    if (chunking_ && chunk_writer_cluster_) {
+      chunk_writer_cluster_->Close();
+      chunk_count_++;
+    }
+
     const double duration =
       static_cast<double>(last_timestamp_) / segment_info_.timecode_scale();
     segment_info_.duration(duration);
-    if (!segment_info_.Finalize(writer_))
+    if (!segment_info_.Finalize(writer_header_))
       return false;
 
     // TODO: Add support for putting the Cues at the front.
-    if (!seek_head_.AddSeekEntry(kMkvCues, writer_->Position() - payload_pos_))
+    if (!seek_head_.AddSeekEntry(kMkvCues, MaxOffset()))
       return false;
 
-    if (!cues_.Write(writer_))
+    if (chunking_) {
+      assert(chunk_writer_cues_);
+      char* name = NULL;
+      if (!UpdateChunkName(&name, "cues"))
+        return false;
+
+      const bool cues_open = chunk_writer_cues_->Open(name);
+      delete [] name;
+      if (!cues_open)
+        return false;
+    }
+
+    if (!cues_.Write(writer_cues_))
       return false;
 
-    if (!seek_head_.Finalize(writer_))
+    if (!seek_head_.Finalize(writer_header_))
       return false;
 
-    if (writer_->Seekable()) {
+    if (writer_header_->Seekable()) {
       assert(size_position_ != -1);
 
-      const int64 pos = writer_->Position();
-
-      // -8 for the size of the segment size
-      const int64 segment_size = pos - size_position_ - 8;
+      const int64 pos = writer_header_->Position();
+      const int64 segment_size = MaxOffset();
       assert(segment_size > 0);
 
-      if (writer_->Position(size_position_))
+      if (writer_header_->Position(size_position_))
         return false;
 
-      if (WriteUIntSize(writer_, segment_size, 8))
+      if (WriteUIntSize(writer_header_, segment_size, 8))
         return false;
 
-      if (writer_->Position(pos))
+      if (writer_header_->Position(pos))
         return false;
+    }
+
+    if (chunking_) {
+      // Do not close any writers until the segment size has been written,
+      // otherwise the size may be off.
+      assert(chunk_writer_cues_);
+      chunk_writer_cues_->Close();
+      assert(chunk_writer_header_);
+      chunk_writer_header_->Close();
     }
   }
 
@@ -1214,8 +1270,7 @@ bool Segment::AddFrame(uint8* frame,
     if (!WriteSegmentHeader())
       return false;
 
-    if (!seek_head_.AddSeekEntry(kMkvCluster,
-                                 writer_->Position() - payload_pos_))
+    if (!seek_head_.AddSeekEntry(kMkvCluster, MaxOffset()))
       return false;
 
     if (output_cues_ && cues_track_ == 0) {
@@ -1301,6 +1356,30 @@ bool Segment::AddFrame(uint8* frame,
     if (!WriteFramesLessThan(timestamp))
       return false;
 
+    if (mode_ == kFile) {
+      if (cluster_list_size_ > 0) {
+        // Update old cluster's size
+        Cluster* old_cluster = cluster_list_[cluster_list_size_-1];
+        assert(old_cluster);
+
+        if (!old_cluster->Finalize())
+          return false;
+      }
+
+      if (output_cues_)
+        new_cuepoint_ = true;
+    }
+
+    if (chunking_ && cluster_list_size_ > 0) {
+      chunk_writer_cluster_->Close();
+      chunk_count_++;
+
+      if (!UpdateChunkName(&chunk_name_, "chk"))
+        return false;
+      if (!chunk_writer_cluster_->Open(chunk_name_))
+        return false;
+    }
+
     uint64 audio_timecode = 0;
     uint64 timecode = timestamp / segment_info_.timecode_scale();
     if (frames_size_ > 0) {
@@ -1315,25 +1394,10 @@ bool Segment::AddFrame(uint8* frame,
     // TODO: Add checks here to make sure the timestamps passed in are valid.
 
     cluster_list_[cluster_list_size_] = new (std::nothrow) Cluster(timecode,
-                                                                   writer_);
+                                                                   writer_cluster_);
     if (!cluster_list_[cluster_list_size_])
       return false;
     cluster_list_size_ = new_size;
-
-    if (mode_ == kFile) {
-      if (cluster_list_size_ > 1) {
-        // Update old cluster's size
-        Cluster* old_cluster = cluster_list_[cluster_list_size_-2];
-        assert(old_cluster);
-
-        if (!old_cluster->Finalize())
-          return false;
-      }
-
-      if (output_cues_)
-        new_cuepoint_ = true;
-    }
-
     new_cluster_ = false;
   }
 
@@ -1371,6 +1435,86 @@ void Segment::OutputCues(bool output_cues) {
   output_cues_ = output_cues;
 }
 
+bool Segment::SetChunking(bool chunking, const char* filename) {
+  if (chunk_count_ > 0)
+    return false;
+
+  if (chunking) {
+    if (!filename)
+      return false;
+
+    // Check if we are being set to what is already set.
+    if (chunking_ && !strcmp(filename, chunking_base_name_))
+      return true;
+
+    int length = strlen(filename) + 1;
+    char* temp = new (std::nothrow) char[length];
+    if (!temp)
+      return false;
+
+#ifdef WIN32
+    strcpy_s(temp, length, filename);
+#else
+    strcpy(temp, filename);
+#endif
+
+    if (chunking_base_name_)
+      delete [] chunking_base_name_;
+
+    chunking_base_name_ = temp;
+
+    if (!UpdateChunkName(&chunk_name_, "chk"))
+      return false;
+
+    if (!chunk_writer_cluster_) {
+      chunk_writer_cluster_ = new (std::nothrow) MkvWriter();
+      if (!chunk_writer_cluster_)
+        return false;
+    }
+
+    if (!chunk_writer_cues_) {
+      chunk_writer_cues_ = new (std::nothrow) MkvWriter();
+      if (!chunk_writer_cues_)
+        return false;
+    }
+
+    if (!chunk_writer_header_) {
+      chunk_writer_header_ = new (std::nothrow) MkvWriter();
+      if (!chunk_writer_header_)
+        return false;
+    }
+
+    if (!chunk_writer_cluster_->Open(chunk_name_))
+      return false;
+
+    // Add 4 for ".hdr"
+    length = strlen(filename) + 4 + 1;
+    char* header = new (std::nothrow) char[length];
+    if (!header)
+      return false;
+
+#ifdef WIN32
+    strcpy_s(header, length-4, chunking_base_name_);
+    strcat_s(header, length, ".hdr");
+#else
+    strcpy(header, chunking_base_name_);
+    strcat(header, ".hdr");
+#endif
+    if (!chunk_writer_header_->Open(header))
+      return false;
+
+    writer_cluster_ = chunk_writer_cluster_;
+    writer_cues_ = chunk_writer_cues_;
+    writer_header_ = chunk_writer_header_;
+
+    delete [] header;
+  }
+
+  chunking_ = chunking;
+
+  return true;
+}
+
 bool Segment::CuesTrack(uint64 track_number) {
   Track* track = GetTrackByNumber(track_number);
   if (!track)
@@ -1386,43 +1530,49 @@ Track* Segment::GetTrackByNumber(uint64 track_number) {
 
 bool Segment::WriteSegmentHeader() {
   // TODO: Support more than one segment.
-  if (!WriteEbmlHeader(writer_))
+  if (!WriteEbmlHeader(writer_header_))
     return false;
 
   // Write "unknown" (-1) as segment size value. If mode is kFile, Segment
   // will write over duration when the file is finalized.
-  if (SerializeInt(writer_, kMkvSegment, 4))
+  if (SerializeInt(writer_header_, kMkvSegment, 4))
     return false;
 
   // Save for later.
-  size_position_ = writer_->Position();
+  size_position_ = writer_header_->Position();
 
   // We need to write 8 bytes because if we are going to overwrite the segment
   // size later we do not know how big our segment will be.
-  if (SerializeInt(writer_, 0x01FFFFFFFFFFFFFFULL, 8))
+  if (SerializeInt(writer_header_, 0x01FFFFFFFFFFFFFFULL, 8))
     return false;
 
-  payload_pos_ =  writer_->Position();
+  payload_pos_ =  writer_header_->Position();
 
-  if (mode_ == kFile && writer_->Seekable()) {
+  if (mode_ == kFile && writer_header_->Seekable()) {
     // Set the duration > 0.0 so SegmentInfo will write out the duration. When
     // the muxer is done writing we will set the correct duration and have
     // SegmentInfo upadte it.
     segment_info_.duration(1.0);
 
-    if (!seek_head_.Write(writer_))
+    if (!seek_head_.Write(writer_header_))
       return false;
   }
 
-  if (!seek_head_.AddSeekEntry(kMkvInfo, writer_->Position() - payload_pos_))
+  if (!seek_head_.AddSeekEntry(kMkvInfo, MaxOffset()))
     return false;
-  if (!segment_info_.Write(writer_))
+  if (!segment_info_.Write(writer_header_))
     return false;
 
-  if (!seek_head_.AddSeekEntry(kMkvTracks, writer_->Position() - payload_pos_))
+  if (!seek_head_.AddSeekEntry(kMkvTracks, MaxOffset()))
     return false;
-  if (!tracks_.Write(writer_))
+  if (!tracks_.Write(writer_header_))
     return false;
+
+  if (chunking_ && (mode_ == kLive || !writer_header_->Seekable()) ) {
+    assert(chunk_writer_header_);
+    chunk_writer_header_->Close();
+  }
+
   header_written_ = true;
 
   return true;
@@ -1439,13 +1589,66 @@ bool Segment::AddCuePoint(uint64 timestamp) {
 
   cue->time(timestamp / segment_info_.timecode_scale());
   cue->block_number(cluster->blocks_added() + 1);
-  cue->cluster_pos(writer_->Position() - payload_pos_);
+  cue->cluster_pos(MaxOffset());
   cue->track(cues_track_);
   if (!cues_.AddCue(cue))
     return false;
 
   new_cuepoint_ = false;
   return true;
+}
+
+bool Segment::UpdateChunkName(char** name, const char* ext) {
+  if (!name || !ext)
+    return false;
+
+  char* str = NULL;
+  char ext_chk[64];
+#ifdef WIN32
+  sprintf_s(ext_chk, 64, "_%06d.%s", chunk_count_, ext);
+#else
+  sprintf(ext_chk, "_%06d.chk", chunk_count_);
+#endif
+
+  const int length = strlen(chunking_base_name_) + strlen(ext_chk) + 1;
+  str = new (std::nothrow) char[length];
+  if (!str)
+    return false;
+
+#ifdef WIN32
+    strcpy_s(str, length-strlen(ext_chk), chunking_base_name_);
+    strcat_s(str, length, ext_chk);
+#else
+    strcpy(chunk_name_, chunking_base_name_);
+    strcat(chunk_name_, ext_chk);
+#endif
+
+  if (*name)
+    delete [] *name;
+  *name = str;
+
+  return true;
+}
+
+int64 Segment::MaxOffset() {
+  int64 offset = -1;
+
+  if (!chunking_) {
+    offset = writer_header_->Position() - payload_pos_;
+  } else {
+    offset = writer_header_->Position() - payload_pos_;
+
+    for (int i=0; i<cluster_list_size_; ++i) {
+      Cluster* const cluster = cluster_list_[i];
+      offset += cluster->Size();
+    }
+
+    if (writer_cues_)
+      offset += writer_cues_->Position();
+  }
+
+
+  return offset;
 }
 
 bool Segment::QueueFrame(Frame* frame) {
