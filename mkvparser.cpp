@@ -5003,6 +5003,11 @@ unsigned long long Track::GetUid() const
     return m_info.uid;
 }
 
+long long Track::GetDefaultDuration() const
+{
+  return m_info.defaultDuration;
+}
+
 const char* Track::GetNameAsUTF8() const
 {
     return m_info.nameAsUTF8;
@@ -5712,6 +5717,8 @@ void Tracks::ParseTrackEntry(
 
     long long lacing = 1;  //default is true
 
+    i.defaultDuration = 0;
+
     while (pos < stop)
     {
 #ifdef _DEBUG
@@ -5729,6 +5736,8 @@ void Tracks::ParseTrackEntry(
         else if (Match(pReader, pos, 0x136E, i.nameAsUTF8))
             assert(i.nameAsUTF8);
         else if (Match(pReader, pos, 0x06, i.codecId))
+            ;
+       else if (Match(pReader, pos, 0x3e383, i.defaultDuration))
             ;
         else if (Match(pReader, pos, 0x1C, lacing))
             assert(lacing <= 1);

@@ -186,8 +186,9 @@ int main(int argc, char* argv[]) {
 
     // TODO(fgalligan): Add support for language to parser.
     const char* track_name = parser_track->GetNameAsUTF8();
-
     const long long track_type = parser_track->GetType();
+    //const long long default_duration = parser_track->GetDefaultDuration();
+    const long long default_duration = 0;
 
     if (track_type == VIDEO_TRACK && output_video) {
       // Get the video track from the parser
@@ -221,6 +222,8 @@ int main(int argc, char* argv[]) {
         video->set_display_height(display_height);
       if (stereo_mode > 0)
         video->SetStereoMode(stereo_mode);
+      if (default_duration > 0)
+        video->set_default_duration(default_duration);
 
       const double rate = pVideoTrack->GetFrameRate();
       if (rate > 0.0) {
@@ -266,6 +269,9 @@ int main(int argc, char* argv[]) {
       const long long bit_depth = pAudioTrack->GetBitDepth();
       if (bit_depth > 0)
         audio->set_bit_depth(bit_depth);
+
+      if (default_duration > 0)
+        audio->set_default_duration(default_duration);
     }
   }
 
@@ -283,6 +289,7 @@ int main(int argc, char* argv[]) {
   // Write clusters
   unsigned char* data = NULL;
   int data_len = 0;
+  long long last_video_timestamp = 0;
 
   const mkvparser::Cluster* cluster = parser_segment->GetFirst();
 
@@ -295,6 +302,25 @@ int main(int argc, char* argv[]) {
       const mkvparser::Track* const parser_track =
         parser_tracks->GetTrackByNumber(static_cast<unsigned long>(trackNum));
       const long long track_type = parser_track->GetType();
+      long long duration = -1;
+      long long reference = -1;
+
+      // Try and get this block's duration
+      const mkvparser::BlockEntry* block_entry_next =
+          cluster->GetNext(block_entry);
+      while ((block_entry_next != NULL) && !block_entry_next->EOS()) {
+        const mkvparser::Block* const block_next =
+            block_entry_next->GetBlock();
+        if (block_next->GetTrackNumber() == trackNum) {
+          duration = block_next->GetTime(cluster) - block->GetTime(cluster);
+
+          // If the duration is 0 assume this frame is an altref frame
+          if (duration == 0)
+            reference = last_video_timestamp;
+          break;
+        }
+        block_entry_next = cluster->GetNext(block_entry_next);
+      }
 
       if ( (track_type == AUDIO_TRACK && output_audio) ||
           (track_type == VIDEO_TRACK && output_video) ) {
@@ -320,11 +346,16 @@ int main(int argc, char* argv[]) {
           if (track_type == AUDIO_TRACK)
             track_num = aud_track;
 
+          if (track_type == VIDEO_TRACK)
+            last_video_timestamp = time_ns;
+
           if (!muxer_segment.AddFrame(data,
                                       frame.len,
                                       track_num,
                                       time_ns,
-                                      is_key)) {
+                                      is_key,
+                                      duration,
+                                      reference)) {
               printf("\n Could not add frame.\n");
               return -1;
           }

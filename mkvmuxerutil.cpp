@@ -293,6 +293,72 @@ bool WriteEbmlElement(IMkvWriter* writer,
   return true;
 }
 
+uint64 WriteBlock(IMkvWriter* writer,
+                  const uint8* data,
+                  uint64 length,
+                  char track_number,
+                  short timecode,
+                  int64 duration,
+                  bool is_key,
+                  int64 reference) {
+  assert(writer);
+  assert(data != NULL);
+  assert(length > 0);
+  assert(track_number > 0);
+  assert(timecode >= 0);
+
+  const int32 block_size = static_cast<int32>(length) + 4;
+  uint64 size =
+      GetUIntSize(kMkvBlock) + GetCodedUIntSize(block_size) + 4 + length;
+  if (duration >= 0)
+    size += EbmlElementSize(kMkvBlockDuration,
+                            static_cast<uint64>(duration),
+                            false);
+  if (reference >= 0)
+    size += EbmlElementSize(kMkvReferenceBlock,
+                            static_cast<uint64>(reference),
+                            false);
+
+  if (!WriteEbmlMasterElement(writer, kMkvBlockGroup, size))
+    return false;
+
+  if (duration >= 0)
+    if (!WriteEbmlElement(writer,
+                          kMkvBlockDuration,
+                          static_cast<uint64>(duration)))
+      return false;
+
+  if (reference >= 0)
+    if (!WriteEbmlElement(writer,
+                          kMkvReferenceBlock,
+                          static_cast<uint64>(reference)))
+      return false;
+
+  if (WriteID(writer, kMkvBlock))
+    return 0;
+
+  if (WriteUInt(writer, block_size))
+    return 0;
+
+  if (WriteUInt(writer, static_cast<uint64>(track_number)))
+    return 0;
+
+  if (SerializeInt(writer, static_cast<uint64>(timecode), 2))
+    return 0;
+
+  uint64 flags = 0;
+  if (SerializeInt(writer, flags, 1))
+    return 0;
+
+  if (writer->Write(data, static_cast<uint32>(length)))
+    return 0;
+
+  const uint64 element_size =
+    GetUIntSize(kMkvBlockGroup) + GetCodedUIntSize(size) + size;
+
+  return element_size;
+}
+
 uint64 WriteSimpleBlock(IMkvWriter* writer,
                         const uint8* data,
                         uint64 length,
@@ -329,7 +395,7 @@ uint64 WriteSimpleBlock(IMkvWriter* writer,
     return 0;
 
   const uint64 element_size =
-    GetUIntSize(kMkvSimpleBlock) + GetCodedUIntSize(length) + 4 + length;
+    GetUIntSize(kMkvSimpleBlock) + GetCodedUIntSize(size) + 4 + length;
 
   return element_size;
 }

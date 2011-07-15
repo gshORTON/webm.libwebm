@@ -55,6 +55,8 @@ class Frame {
   // Copies |frame| data into |frame_|. Returns true on success.
   bool Init(const uint8* frame, uint64 length);
 
+  void set_duration(uint64 duration) { duration_ = duration; }
+  uint64 duration() const { return duration_; }
   const uint8* frame() const { return frame_; }
   uint64 length() const { return length_; }
   void set_track_number(uint64 track_number) { track_number_ = track_number; }
@@ -65,6 +67,8 @@ class Frame {
   bool is_key() const { return is_key_; }
 
  private:
+  int64 duration_;
+
   // Pointer to the data. Owned by this class.
   uint8* frame_;
 
@@ -193,6 +197,8 @@ class Track {
   void set_codec_id(const char* codec_id);
   const char* codec_id() const { return codec_id_; }
   const uint8* codec_private() const { return codec_private_; }
+  void set_default_duration(uint64 duration) { default_duration_ = duration; }
+  uint64 default_duration() const { return default_duration_; }
   void set_language(const char* language);
   const char* language() const { return language_; }
   void set_name(const char* name);
@@ -212,6 +218,7 @@ class Track {
   // Track element names
   char* codec_id_;
   uint8* codec_private_;
+  uint64 default_duration_;
   char* language_;
   char* name_;
   uint64 number_;
@@ -371,7 +378,7 @@ class Tracks {
 class Cluster {
  public:
   // |timecode| is the absolute timecode of the cluster.
-  Cluster(uint64 timecode, IMkvWriter* writer);
+  Cluster(uint64 timecode, IMkvWriter* writer, const Tracks* tracks);
   ~Cluster();
 
   // Adds a frame to be output in the file. The frame is written out through
@@ -387,7 +394,9 @@ class Cluster {
                 uint64 length,
                 uint64 track_number,
                 short timecode,
-                bool is_key);
+                bool is_key,
+                int64 duration,
+                int64 reference);
 
   // Increments the size of the cluster's data in bytes.
   void AddPayloadSize(uint64 size);
@@ -398,6 +407,7 @@ class Cluster {
 
   int32 blocks_added() const { return blocks_added_; }
   uint64 payload_size() const { return payload_size_; }
+  int64 position_for_cues() const { return position_for_cues_; }
   uint64 timecode() const { return timecode_; }
 
  private:
@@ -416,11 +426,15 @@ class Cluster {
   // The size of the cluster elements in bytes.
   uint64 payload_size_;
 
+  int64 position_for_cues_;
+
   // The file position of the cluster's size element.
   int64 size_position_;
 
   // The absolute timecode of the cluster.
   const uint64 timecode_;
+
+  const Tracks* const tracks_;
 
   // Pointer to the writer object. Not owned by this class.
   IMkvWriter* writer_;
@@ -540,7 +554,9 @@ class Segment {
                 uint64 length,
                 uint64 track_number,
                 uint64 timestamp,
-                bool is_key);
+                bool is_key,
+                int64 duration,
+                int64 reference);
 
   // Adds a video track to the segment. Returns the number of the track on
   // success, 0 on error.

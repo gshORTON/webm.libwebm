@@ -209,6 +209,7 @@ public:
     long long GetType() const;
     long long GetNumber() const;
     unsigned long long GetUid() const;
+    long long GetDefaultDuration() const;
     const char* GetNameAsUTF8() const;
     const char* GetCodecNameAsUTF8() const;
     const char* GetCodecId() const;
@@ -228,6 +229,7 @@ public:
         long long type;
         long long number;
         unsigned long long uid;
+        long long defaultDuration;
         char* nameAsUTF8;
         char* codecId;
         unsigned char* codecPrivate;

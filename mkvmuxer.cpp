@@ -67,7 +67,8 @@ bool WriteEbmlHeader(IMkvWriter* writer) {
 // Frame Class
 
 Frame::Frame()
-    : frame_(NULL),
+    : duration_(-1),
+      frame_(NULL),
       length_(0),
       track_number_(0),
       timestamp_(0),
@@ -266,6 +267,7 @@ bool Cues::Write(IMkvWriter* writer) const {
 Track::Track()
     : codec_id_(NULL),
       codec_private_(NULL),
+      default_duration_(0),
       language_(NULL),
       name_(NULL),
       number_(0),
@@ -283,6 +285,8 @@ uint64 Track::PayloadSize() const {
   uint64 size = EbmlElementSize(kMkvTrackNumber, number_, false);
   size += EbmlElementSize(kMkvTrackUID, uid_, false);
   size += EbmlElementSize(kMkvTrackType, type_, false);
+  if (default_duration_)
+    size += EbmlElementSize(kMkvDefaultDuration, default_duration_, false);
   if (codec_id_)
     size += EbmlElementSize(kMkvCodecID, codec_id_, false);
   if (codec_private_)
@@ -318,6 +322,8 @@ bool Track::Write(IMkvWriter* writer) const {
   uint64 size = EbmlElementSize(kMkvTrackNumber, number_, false);
   size += EbmlElementSize(kMkvTrackUID, uid_, false);
   size += EbmlElementSize(kMkvTrackType, type_, false);
+  if (default_duration_)
+    size += EbmlElementSize(kMkvDefaultDuration, default_duration_, false);
   if (codec_id_)
     size += EbmlElementSize(kMkvCodecID, codec_id_, false);
   if (codec_private_)
@@ -340,6 +346,10 @@ bool Track::Write(IMkvWriter* writer) const {
     return false;
   if (!WriteEbmlElement(writer, kMkvTrackType, type_))
     return false;
+  if (default_duration_) {
+    if (!WriteEbmlElement(writer, kMkvDefaultDuration, default_duration_))
+      return false;
+  }
   if (codec_id_) {
     if (!WriteEbmlElement(writer, kMkvCodecID, codec_id_))
       return false;
@@ -757,14 +767,18 @@ bool Tracks::Write(IMkvWriter* writer) const {
 //
 // Cluster Class
 
-Cluster::Cluster(uint64 timecode, IMkvWriter* writer)
+Cluster::Cluster(uint64 timecode, IMkvWriter* writer, const Tracks* tracks)
     : blocks_added_(0),
       finalized_(false),
       header_written_(false),
       payload_size_(0),
+      position_for_cues_(-1),
       size_position_(-1),
       timecode_(timecode),
+      tracks_(tracks),
       writer_(writer) {
+  // TODO(fgalligan): Create an Init function.
+  position_for_cues_ = writer_->Position();
 }
 
 Cluster::~Cluster() {
@@ -774,7 +788,9 @@ bool Cluster::AddFrame(const uint8* frame,
                        uint64 length,
                        uint64 track_number,
                        short timecode,
-                       bool is_key) {
+                       bool is_key,
+                       int64 duration,
+                       int64 reference) {
   if (finalized_)
     return false;
 
@@ -782,12 +798,39 @@ bool Cluster::AddFrame(const uint8* frame,
     if (!WriteClusterHeader())
       return false;
 
+  const Track* const track = tracks_->GetTrackByNumber(track_number);
+  if (!track)
+    return false;
+
+  uint64 element_size = 0;
+  if (track->default_duration() &&
+      duration == 0 && // duration >= 0 &&
+      track->default_duration() != static_cast<uint64>(duration)) {
+    element_size = WriteBlock(writer_,
+                              frame,
+                              length,
+                              static_cast<char>(track_number),
+                              timecode,
+                              duration,
+                              is_key,
+                              reference);
+  } else {
+    element_size = WriteSimpleBlock(writer_,
+                                    frame,
+                                    length,
+                                    static_cast<char>(track_number),
+                                    timecode,
+                                    is_key);
+  }
+
+  /*
   const uint64 element_size = WriteSimpleBlock(writer_,
                                                frame,
                                                length,
                                                static_cast<char>(track_number),
                                                timecode,
                                                is_key);
+  */
   if (!element_size)
     return false;
 
@@ -1245,7 +1288,9 @@ bool Segment::AddFrame(uint8* frame,
                        uint64 length,
                        uint64 track_number,
                        uint64 timestamp,
-                       bool is_key) {
+                       bool is_key,
+                       int64 duration,
+                       int64 reference) {
   assert(frame);
 
   if (!header_written_) {
@@ -1286,7 +1331,10 @@ bool Segment::AddFrame(uint8* frame,
       return false;
     new_frame->set_track_number(track_number);
     new_frame->set_timestamp(timestamp);
+    new_frame->set_duration(duration);
     new_frame->set_is_key(is_key);
+
+    // TODO(fgalligan): Add support for reference to aduio.
 
     if (!QueueFrame(new_frame))
       return false;
@@ -1352,9 +1400,9 @@ bool Segment::AddFrame(uint8* frame,
 
     // TODO(fgalligan): Add checks here to make sure the timestamps passed in
     // are valid.
-
     cluster_list_[cluster_list_size_] = new (std::nothrow) Cluster(timecode,
-                                                                   writer_);
+                                                                   writer_,
+                                                                   &tracks_);
     if (!cluster_list_[cluster_list_size_])
       return false;
     cluster_list_size_ = new_size;
@@ -1388,6 +1436,10 @@ bool Segment::AddFrame(uint8* frame,
   block_timecode -= static_cast<int64>(cluster->timecode());
   assert(block_timecode >= 0);
 
+  int64 ref_timecode = reference;
+  if (reference > -1)
+    ref_timecode = reference / segment_info_.timecode_scale();
+
   if (new_cuepoint_ && cues_track_ == track_number) {
     if (!AddCuePoint(timestamp))
       return false;
@@ -1397,7 +1449,9 @@ bool Segment::AddFrame(uint8* frame,
                          length,
                          track_number,
                          static_cast<short>(block_timecode),
-                         is_key))
+                         is_key,
+                         duration,
+                         ref_timecode))
     return false;
 
   if (timestamp > last_timestamp_)
@@ -1480,6 +1534,7 @@ bool Segment::AddCuePoint(uint64 timestamp) {
   cue->set_time(timestamp / segment_info_.timecode_scale());
   cue->set_block_number(cluster->blocks_added() + 1);
   cue->set_cluster_pos(writer_->Position() - payload_pos_);
+  cue->set_cluster_pos(cluster->position_for_cues() - payload_pos_);
   cue->set_track(cues_track_);
   if (!cues_.AddCue(cue))
     return false;
@@ -1537,7 +1592,9 @@ bool Segment::WriteFramesAll() {
                              frame->length(),
                              frame->track_number(),
                              static_cast<short>(block_timecode),
-                             frame->is_key()))
+                             frame->is_key(),
+                             frame->duration(),
+                             -1))
         return false;
 
       if (frame->timestamp() > last_timestamp_)
@@ -1585,7 +1642,9 @@ bool Segment::WriteFramesLessThan(uint64 timestamp) {
                              frame_prev->length(),
                              frame_prev->track_number(),
                              static_cast<short>(block_timecode),
-                             frame_prev->is_key()))
+                             frame_prev->is_key(),
+                             frame_prev->duration(),
+                             -1))
         return false;
 
       ++shift_left;

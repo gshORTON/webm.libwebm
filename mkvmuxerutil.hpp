@@ -53,6 +53,15 @@ bool WriteEbmlElement(IMkvWriter* writer,
                       const uint8* value,
                       uint64 size);
 
+uint64 WriteBlock(IMkvWriter* writer,
+                  const uint8* data,
+                  uint64 length,
+                  char track_number,
+                  short timecode,
+                  int64 duration,
+                  bool is_key,
+                  int64 reference);
+
 // Output an Mkv Simple Block.
 // Inputs:
 //   data:         Pointer to the data.
