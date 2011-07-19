@@ -62,8 +62,10 @@ void MkvWriter::Close() {
   }
 }
 
-int64 MkvWriter::Position() const {
-  assert(file_);
+long long MkvWriter::Position() const {
+  if (!file_)
+    return 0;
+
 #ifdef _MSC_VER
     return _ftelli64(file_);
 #else
